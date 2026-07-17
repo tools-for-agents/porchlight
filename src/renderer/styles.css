@@ -57,15 +57,21 @@ body {
   border-radius: 8px; border: 1px solid var(--line);
   background: transparent; color: var(--muted);
   font: inherit; font-size: 12px; cursor: pointer;
-  display: grid; place-items: center;
+  /* flex, not grid: place-items:center stacked the label and the running-dot in two ROWS,
+     so the dot sat UNDER "Page 1" like a speck of dust instead of beside it. */
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   transition: color .12s, border-color .12s, background .12s;
 }
 .page-btn:hover { color: var(--txt); border-color: var(--line); background: var(--panel-2); }
 .page-btn.on { color: var(--txt); border-color: var(--accent); background: rgba(74, 222, 128, .12); }
 .page-btn .n { font-variant-numeric: tabular-nums; }
-/* a page with agents on it says so, without stealing the eye */
+/* A page you are NOT looking at can still have agents on it — that is the only thing this
+   dot is for. On the page you are on it says nothing you cannot already see, so it is not
+   drawn there. */
 .page-btn .live-dot {
-  width: 4px; height: 4px; border-radius: 999px; background: var(--green); margin-left: 4px;
+  width: 5px; height: 5px; border-radius: 999px; background: var(--green);
+  box-shadow: 0 0 6px rgba(74, 222, 128, .8);
+  flex: none;
 }
 
 .foot-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }

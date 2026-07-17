@@ -15,7 +15,10 @@ const killAllBtn = $('#killall');
 const tpl = $('#bay-tpl');
 
 /** state.pages[i].bays[j] = { path, title } | null  — the only thing we persist */
-let state = { pages: [{ bays: Array(BAYS_PER_PAGE).fill(null) }] };
+let state = { pages: [{ id: 'pg_1', bays: Array(BAYS_PER_PAGE).fill(null) }] };
+// Set when main could not read state.json. While it is true NOTHING here writes: an empty
+// grid on screen is a display; an empty grid on disk is somebody's bays deleted.
+let readOnly = false;
 let pageIndex = 0;
 let zoomed = null;      // bay id filling the grid, or null
 
@@ -68,7 +71,7 @@ const theme = {
 };
 
 // ── persistence ─────────────────────────────────────────────────────────────
-const save = () => window.hangar.saveState(state);
+const save = () => { if (!readOnly) window.hangar.saveState(state); };
 
 // ── rendering ───────────────────────────────────────────────────────────────
 function renderPages() {
@@ -87,8 +90,10 @@ function renderPages() {
     n.textContent = `Page ${i + 1}`;
     b.append(n);
 
-    // A page you are not looking at can still have agents on it. Say so.
-    const live = page.bays.filter((_, s) => terms.get(bayId(i, s))?.running).length;
+    // A page you are not looking at can still have agents on it — that is the whole point
+    // of this dot, so the page you ARE on does not get one. Nothing it could say there is
+    // news: the agents are on screen.
+    const live = i === pageIndex ? 0 : page.bays.filter((_, s) => terms.get(bayId(i, s))?.running).length;
     if (live) {
       const d = document.createElement('span');
       d.className = 'live-dot';
@@ -302,6 +307,7 @@ async function closePage(i) {
 async function pick(slot) {
   const folder = await window.hangar.pickFolder();
   if (!folder) return;                       // cancelled: leave the bay empty
+  readOnly = false;                          // picking a folder IS the user accepting this grid
   state.pages[pageIndex].bays[slot] = { path: folder.path, title: folder.title };
   save();
   renderAll();
@@ -384,6 +390,13 @@ killAllBtn.addEventListener('click', async () => {
 (async function boot() {
   const loaded = await window.hangar.loadState();
   if (loaded?.pages?.length) state = loaded;
+  // 🔑 The id-patch below calls save(). If the load FAILED, that save is what overwrites a
+  // real state file with an empty one — which is exactly how seven bays were lost once.
+  readOnly = loaded?.ok === false;
+  if (readOnly) {
+    console.warn('hangar: could not read state.json —', loaded.error,
+      '· a copy is at state.json.corrupt · not writing anything until you change something deliberately');
+  }
   let patched = false;
   for (const p of state.pages) if (!p.id) { p.id = newPageId(); patched = true; }   // state written before ids existed
   if (patched) save();

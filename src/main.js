@@ -123,18 +123,55 @@ function loginEnv() {
 // with your own ~/.claude, exactly as it does in a terminal.
 const stateFile = () => path.join(app.getPath('userData'), 'state.json');
 
+const backupFile = () => path.join(app.getPath('userData'), 'state.bak.json');
+
+// 🔑 A FAILED READ MUST NEVER CAUSE A WRITE.
+//
+// This lost a real user's bays. loadState() swallowed a parse error and returned an empty
+// default; the renderer then stamped ids on that default's pages and called save() — and
+// the empty default landed on top of seven bays somebody had actually set up. Two bugs
+// holding hands:
+//
+//   1. saveState wrote in place, so a reader could catch a half-written file and throw.
+//   2. loadState reported "I could not read it" and "there is nothing here" with the same
+//      value, so the caller could not tell the difference and saved over the wreckage.
+//
+// Now: writes are atomic (tmp + rename, so a reader sees old or new, never half), the last
+// good state is kept beside it, and a read that FAILS says so — `ok:false` — which the
+// renderer treats as "show a clean grid but do not write anything until the user acts".
+// An unreadable file is also copied aside rather than overwritten, because it is the only
+// copy of something that mattered.
 function loadState() {
+  const empty = { pages: [{ id: 'pg_1', bays: Array(BAYS_PER_PAGE).fill(null) }] };
+  const read = (f) => {
+    const s = JSON.parse(fs.readFileSync(f, 'utf8'));
+    if (!Array.isArray(s?.pages) || !s.pages.length) throw new Error('no pages');
+    return s;
+  };
+
   try {
-    const s = JSON.parse(fs.readFileSync(stateFile(), 'utf8'));
-    if (Array.isArray(s?.pages) && s.pages.length) return s;
-  } catch { /* first run, or a file we cannot read: start clean rather than crash */ }
-  return { pages: [{ bays: Array(BAYS_PER_PAGE).fill(null) }] };
+    return { ...read(stateFile()), ok: true };
+  } catch (e) {
+    if (!fs.existsSync(stateFile())) return { ...empty, ok: true };   // genuinely a first run
+    // The file is there and unreadable. Try the backup before giving up on someone's work.
+    try {
+      const b = read(backupFile());
+      try { fs.copyFileSync(stateFile(), `${stateFile()}.corrupt`); } catch { /* best effort */ }
+      return { ...b, ok: true, recovered: true };
+    } catch { /* no usable backup either */ }
+    try { fs.copyFileSync(stateFile(), `${stateFile()}.corrupt`); } catch { /* best effort */ }
+    return { ...empty, ok: false, error: String(e?.message || e) };
+  }
 }
 
 function saveState(state) {
   try {
     fs.mkdirSync(path.dirname(stateFile()), { recursive: true });
-    fs.writeFileSync(stateFile(), JSON.stringify(state, null, 2));
+    // keep the last good one before replacing it
+    try { if (fs.existsSync(stateFile())) fs.copyFileSync(stateFile(), backupFile()); } catch { /* best effort */ }
+    const tmp = `${stateFile()}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
+    fs.renameSync(tmp, stateFile());          // atomic: a reader sees old or new
   } catch { /* a launcher that cannot remember is still a launcher */ }
 }
 

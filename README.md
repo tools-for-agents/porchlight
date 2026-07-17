@@ -38,7 +38,11 @@ your local `claude`, which authenticates itself exactly as it does in your termi
 is sent anywhere, and there is nothing here to leak.
 
 What it stores, in `~/Library/Application Support/hangar/state.json`: the folder paths you
-picked and their titles. Nothing else.
+picked and their titles. Nothing else. It is written atomically and the previous version is
+kept beside it as `state.bak.json`; if the live file is ever unreadable hangar recovers from
+the backup, keeps the bad one as `state.json.corrupt`, and refuses to write anything until
+you make a deliberate change — an empty grid on screen is a display, an empty grid on disk
+is your bays deleted.
 
 ## Install
 
