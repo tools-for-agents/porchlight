@@ -17,11 +17,36 @@ const tpl = $('#bay-tpl');
 /** state.pages[i].bays[j] = { path, title } | null  — the only thing we persist */
 let state = { pages: [{ bays: Array(BAYS_PER_PAGE).fill(null) }] };
 let pageIndex = 0;
+let zoomed = null;      // bay id filling the grid, or null
 
 /** id -> { term, fit, ro, running } for bays that have ever been rendered */
 const terms = new Map();
 
-const bayId = (page, slot) => `p${page}s${slot}`;
+// 🔑 A BAY'S ID MUST NOT MOVE WHEN A PAGE IS DELETED.
+//
+// These were positional (`p0s3`). Close page 1 and page 2 slides down into index 0 —
+// every id on it changes, the pty living under the old key in main is orphaned, and the
+// tile shows an empty terminal next to a process nobody can reach or kill. So the page
+// carries an id it keeps for life, and the bay is that id plus its slot.
+const pageId = (i) => state.pages[i]?.id || `p${i}`;
+const bayId = (i, slot) => `${pageId(i)}s${slot}`;
+const newPageId = () => `pg_${Math.random().toString(36).slice(2, 10)}`;
+
+// Nine bays, nine hues, fixed to the slot so a bay's colour never moves under you.
+// Slot-based rather than hashed from the folder: with nine of them a hash collides and
+// two neighbours go the same colour, which is the one thing this has to never do.
+const BAY_COLORS = [
+  '#6ea8fe', // blue
+  '#a78bfa', // violet
+  '#4ade80', // green
+  '#fbbf24', // amber
+  '#f472b6', // pink
+  '#22d3ee', // cyan
+  '#fb923c', // orange
+  '#a3e635', // lime
+  '#f87171', // red
+];
+const bayColor = (slot) => BAY_COLORS[slot % BAY_COLORS.length];
 
 const theme = {
   background: '#0d1117',
@@ -64,6 +89,20 @@ function renderPages() {
     }
 
     b.addEventListener('click', () => { pageIndex = i; renderAll(); });
+
+    // You could add pages and never get rid of one. A page with agents on it asks first —
+    // closing it kills them, and that is not something to discover afterwards.
+    if (state.pages.length > 1) {
+      b.classList.add('closable');
+      const x = document.createElement('button');
+      x.className = 'page-x';
+      x.type = 'button';
+      x.textContent = '✕';
+      x.title = `Close page ${i + 1}`;
+      x.setAttribute('aria-label', `Close page ${i + 1}`);
+      x.addEventListener('click', (e) => { e.stopPropagation(); closePage(i); });
+      b.append(x);
+    }
     pagesNav.append(b);
   });
 
@@ -74,7 +113,7 @@ function renderPages() {
   add.title = 'Add another nine';
   add.setAttribute('aria-label', 'Add a page');
   add.addEventListener('click', () => {
-    state.pages.push({ bays: Array(BAYS_PER_PAGE).fill(null) });
+    state.pages.push({ id: newPageId(), bays: Array(BAYS_PER_PAGE).fill(null) });
     pageIndex = state.pages.length - 1;
     save();
     renderAll();
@@ -84,6 +123,7 @@ function renderPages() {
 
 function renderGrid() {
   grid.replaceChildren();
+  grid.classList.toggle('zoomed', !!zoomed);
   const page = state.pages[pageIndex];
 
   page.bays.forEach((bay, slot) => {
@@ -100,6 +140,7 @@ function renderGrid() {
 
     plus.hidden = true;
     live.hidden = false;
+    node.style.setProperty('--bay-c', bayColor(slot));
     $('.title', node).textContent = bay.title;
     $('.title', node).title = bay.path;
 
@@ -108,6 +149,12 @@ function renderGrid() {
     $('.dot', node).classList.toggle('exited', !!rec && !rec.running);
     node.classList.toggle('busy', !!rec?.running);
 
+    if (zoomed === id) node.classList.add('zoom');
+    $('.zoom', node).addEventListener('click', () => toggleZoom(id));
+    // the title bar is a big target and does nothing else
+    $('.head', node).addEventListener('dblclick', () => toggleZoom(id));
+    // clicking the chrome should put you in the terminal, not nowhere
+    $('.head', node).addEventListener('click', (e) => { if (!e.target.closest('.act')) terms.get(id)?.term.focus(); });
     $('.reveal', node).addEventListener('click', () => window.hangar.openFolder(bay.path));
     $('.restart', node).addEventListener('click', () => startBay(id, slot, bay));
     $('.close', node).addEventListener('click', () => closeBay(id, slot));
@@ -120,8 +167,9 @@ function renderGrid() {
 function renderAll() {
   // Terminals are torn down when their tile leaves the DOM; the pty keeps running in
   // main and the buffer is replayed on the way back. The agent never notices a page turn.
+  const here = `${pageId(pageIndex)}s`;
   for (const [id, rec] of terms) {
-    if (!id.startsWith(`p${pageIndex}s`)) rec.ro?.disconnect();
+    if (!id.startsWith(here)) rec.ro?.disconnect();
   }
   renderGrid();
   renderPages();
@@ -211,6 +259,36 @@ async function closeBay(id, slot) {
   renderAll();
 }
 
+function toggleZoom(id) {
+  zoomed = zoomed === id ? null : id;
+  renderAll();
+  // the tile just changed size by a factor of nine; the pty needs to hear about it
+  requestAnimationFrame(() => terms.get(id)?.term.focus());
+}
+
+async function closePage(i) {
+  const page = state.pages[i];
+  const live = page.bays.filter((_, s) => terms.get(bayId(i, s))?.running).length;
+  // Killing agents is not undoable, so say the number and let them stop.
+  if (live && !confirm(`Close page ${i + 1}? ${live} running agent${live > 1 ? 's' : ''} will be stopped.`)) return;
+
+  for (let s = 0; s < BAYS_PER_PAGE; s++) {
+    const id = bayId(i, s);
+    const rec = terms.get(id);
+    if (!rec) continue;
+    await window.hangar.kill(id);
+    rec.ro?.disconnect();
+    rec.term.dispose();
+    terms.delete(id);
+  }
+
+  state.pages.splice(i, 1);
+  if (!state.pages.length) state.pages.push({ id: newPageId(), bays: Array(BAYS_PER_PAGE).fill(null) });
+  pageIndex = Math.min(pageIndex > i ? pageIndex - 1 : pageIndex, state.pages.length - 1);
+  save();
+  renderAll();
+}
+
 // ── the + ───────────────────────────────────────────────────────────────────
 async function pick(slot) {
   const folder = await window.hangar.pickFolder();
@@ -220,7 +298,55 @@ async function pick(slot) {
   renderAll();
 }
 
+// ── usage ───────────────────────────────────────────────────────────────────
+// The same two numbers ~/.claude/statusline.sh drew under every prompt, drawn once here
+// instead of nine times inside nine 20-row terminals. Same thresholds as that script, so
+// the colour means the same thing it always did: green under 50, amber to 80, red above.
+const m5 = $('#m5'), m7 = $('#m7'), unote = $('#unote');
+
+const pressure = (p) => (p >= 80 ? 'hot' : p >= 50 ? 'warn' : '');
+
+// "2h14m" / "3d4h" — the countdown from statusline.sh's left()
+function left(resetsAt) {
+  if (!resetsAt) return '';
+  const secs = Math.round(resetsAt - Date.now() / 1000);
+  if (secs <= 0) return 'now';
+  const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600), m = Math.floor((secs % 3600) / 60);
+  if (d > 0) return `${d}d${h}h`;
+  if (h > 0) return `${h}h${m}m`;
+  return `${m}m`;
+}
+
+function meter(el, w) {
+  if (!w) { el.hidden = true; return false; }
+  el.hidden = false;
+  const p = Math.max(0, Math.min(100, w.pct ?? 0));
+  el.classList.remove('warn', 'hot');
+  const c = pressure(p);
+  if (c) el.classList.add(c);
+  $('.fill', el).style.width = `${p}%`;
+  $('.pct', el).textContent = `${p}%`;
+  // Always a countdown, never a date: "↻1h46m" is the thing you actually want to know,
+  // and it is what the statusline this replaces always said. main turns /usage's prose
+  // back into an epoch; the raw text is only a fallback if that parse ever fails.
+  const l = w.resets_at ? left(w.resets_at) : (w.resets_text || '');
+  $('.reset', el).textContent = l ? `↻${l}` : '';
+  return true;
+}
+
+let usage = null;
+function paintUsage(u) {
+  if (u) usage = u;
+  const a = meter(m5, usage?.five_hour);
+  const b = meter(m7, usage?.seven_day);
+  // Before any bay has run there is nothing to report, and a made-up 0% would be a lie.
+  unote.hidden = a || b;
+}
+// The reset countdowns are the only thing that moves on their own.
+setInterval(() => { if (usage) paintUsage(); }, 30_000);
+
 // ── wiring ──────────────────────────────────────────────────────────────────
+window.hangar.onUsage((u) => paintUsage(u));
 window.hangar.onData(({ id, data }) => terms.get(id)?.term.write(data));
 
 window.hangar.onExit(({ id, code, reason }) => {
@@ -230,6 +356,13 @@ window.hangar.onExit(({ id, code, reason }) => {
   const why = reason ? ` ${reason}` : '';
   rec.term.write(`\r\n\x1b[90m── agent exited (${code})${why} · ⟳ to restart ──\x1b[0m\r\n`);
   renderAll();
+});
+
+// esc: xterm gets the keystroke first when a terminal is focused (claude needs esc to
+// interrupt), so this only fires when focus is on the chrome. The ⤢ button is the way
+// out from inside a terminal.
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && zoomed) { zoomed = null; renderAll(); }
 });
 
 killAllBtn.addEventListener('click', async () => {
@@ -242,5 +375,10 @@ killAllBtn.addEventListener('click', async () => {
 (async function boot() {
   const loaded = await window.hangar.loadState();
   if (loaded?.pages?.length) state = loaded;
+  let patched = false;
+  for (const p of state.pages) if (!p.id) { p.id = newPageId(); patched = true; }   // state written before ids existed
+  if (patched) save();
+  if (window.hangar.zoomAtBoot) zoomed = window.hangar.zoomAtBoot;   // test hook
   renderAll();
+  paintUsage(await window.hangar.usage());
 })();

@@ -10,14 +10,46 @@ const pty = require('node-pty');
 // ── What a bay actually runs ─────────────────────────────────────────────────
 // The whole app is a launcher for exactly this. It is written here, once, in the open,
 // because a tile that silently runs something else is a trapdoor.
+//
+// The --settings override swaps the user's own statusline for hangar's probe, which
+// prints nothing and files the rate-limit numbers for the footer instead. It overrides
+// ONLY statusLine, for these sessions, and touches no file the user owns.
 const CLAUDE_ARGS = ['--dangerously-skip-permissions'];
 
 const BAYS_PER_PAGE = 9;
 const MAX_SCROLLBACK = 200_000;   // chars kept per bay, so a chatty agent cannot eat the heap
 
+const usageFile = () => path.join(app.getPath('userData'), 'usage.json');
+
+// The probe has to live on a real path the tile's node can execute. Inside a packaged
+// .app the source is in an asar archive, which an outside process cannot run out of —
+// so copy it next to the state file and point the setting at the copy.
+function probePath() {
+  const dst = path.join(app.getPath('userData'), 'usage-probe.js');
+  try {
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(path.join(__dirname, 'usage-probe.js'), dst);
+  } catch { /* keep whatever copy is already there */ }
+  return dst;
+}
+
+function claudeArgs() {
+  const settings = JSON.stringify({
+    statusLine: { type: 'command', command: `node ${JSON.stringify(probePath())}`, padding: 0 },
+  });
+  return [...CLAUDE_ARGS, '--settings', settings];
+}
+
 /** @type {Map<string, {proc: import('node-pty').IPty, buf: string, cwd: string, exited: boolean}>} */
 const bays = new Map();
 let win = null;
+
+const SENTINEL = '__HANGAR_PATH__';
+const afterSentinel = (stdout) => {
+  const s = String(stdout || '');
+  const i = s.lastIndexOf(SENTINEL);
+  return i === -1 ? '' : s.slice(i + SENTINEL.length).trim();
+};
 
 // ── Finding `claude` ─────────────────────────────────────────────────────────
 //
@@ -34,8 +66,10 @@ function findClaude() {
   if (claudePathPromise) return claudePathPromise;
   claudePathPromise = new Promise((resolve) => {
     const sh = process.env.SHELL || '/bin/zsh';
-    execFile(sh, ['-lic', 'command -v claude'], { timeout: 8000 }, (err, stdout) => {
-      const hit = String(stdout || '').trim().split('\n').filter(Boolean).pop();
+    // Sentinel here too — same reason as loginEnv below. This one got away with taking the
+    // last line only because the shell's chatter happens to come first.
+    execFile(sh, ['-lic', `printf '%s' '${SENTINEL}'; command -v claude`], { timeout: 8000 }, (err, stdout) => {
+      const hit = afterSentinel(stdout).split('\n').filter(Boolean).pop();
       if (!err && hit && fs.existsSync(hit)) return resolve(hit);
       // The shell could not tell us. Try the places it usually lives before giving up,
       // so a broken rc file is not fatal.
@@ -52,14 +86,33 @@ function findClaude() {
 
 // The same reasoning for the environment the agent runs in: inherit the login shell's
 // PATH so anything the agent shells out to (git, node, gh) is found too.
+//
+// 🔑 AN INTERACTIVE SHELL TALKS, AND ITS CHATTER IS ON STDOUT.
+//
+// `zsh -lic 'printf %s "$PATH"'` does not print your PATH. On macOS it prints
+//
+//     Restored session: Fri Jul 17 12:22:46 +03 2026
+//     /Users/me/.local/bin:/opt/homebrew/bin:...
+//
+// because /etc/zshrc_Apple_Terminal announces itself, to stdout, on every interactive
+// shell. Taking the whole thing as PATH puts "Restored session: ...\n/Users/me/.local/bin"
+// in front of the real entries, and a PATH entry with a newline in it poisons lookups for
+// everything downstream. It broke this app in the least obvious way possible: `claude`
+// still launched, because hangar spawns it by absolute path — but the statusline's
+// `node ...` could not be resolved, so it silently never ran, and the footer sat empty
+// with no error anywhere.
+//
+// So mark the value. Anything the profile wants to say can be said before the sentinel.
 let loginEnvPromise = null;
 function loginEnv() {
   if (loginEnvPromise) return loginEnvPromise;
   loginEnvPromise = new Promise((resolve) => {
     const sh = process.env.SHELL || '/bin/zsh';
-    execFile(sh, ['-lic', 'printf %s "$PATH"'], { timeout: 8000 }, (err, stdout) => {
-      const p = String(stdout || '').trim();
-      resolve({ ...process.env, ...(p ? { PATH: p } : {}), TERM: 'xterm-256color' });
+    execFile(sh, ['-lic', `printf '%s%s' '${SENTINEL}' "$PATH"`], { timeout: 8000 }, (err, stdout) => {
+      const p = afterSentinel(stdout);
+      // Only trust something that actually looks like a PATH.
+      const ok = p && p.includes('/') && !p.includes('\n');
+      resolve({ ...process.env, ...(ok ? { PATH: p } : {}), TERM: 'xterm-256color' });
     });
   });
   return loginEnvPromise;
@@ -112,10 +165,10 @@ async function startBay(id, cwd, cols, rows) {
     return { ok: false, error: 'claude not found' };
   }
 
-  const env = await loginEnv();
+  const env = { ...(await loginEnv()), HANGAR_USAGE_FILE: usageFile() };
   let proc;
   try {
-    proc = pty.spawn(bin, CLAUDE_ARGS, {
+    proc = pty.spawn(bin, claudeArgs(), {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,
@@ -131,7 +184,6 @@ async function startBay(id, cwd, cols, rows) {
   bays.set(id, bay);
 
   proc.onData((data) => {
-    if (process.env.HANGAR_DEBUG) console.log(`[${id}] +${data.length}b`, JSON.stringify(data.slice(0, 60)));
     bay.buf += data;
     if (bay.buf.length > MAX_SCROLLBACK) bay.buf = bay.buf.slice(-MAX_SCROLLBACK);
     send('bay:data', { id, data });
@@ -142,6 +194,7 @@ async function startBay(id, cwd, cols, rows) {
     send('bay:exit', { id, code: exitCode });
   });
 
+  setTimeout(refreshUsage, 3000);
   return { ok: true, pid: proc.pid, bin };
 }
 
@@ -181,11 +234,127 @@ ipcMain.on('bay:resize', (_e, { id, cols, rows }) => {
   }
 });
 
+// ── usage ────────────────────────────────────────────────────────────────────
+//
+// 🔑 CLAUDE CODE DOES NOT RUN THE STATUSLINE IN A SHORT TERMINAL. Measured: at 16 rows
+// it runs, at 12 it is never invoked at all — and a bay in a 3×3 grid on a 940px window
+// is 12 rows. So the elegant plan (reuse the statusline the user already had, which
+// prints the very numbers we want) cannot feed this footer: in the one place it would be
+// used, it never fires. It took a canary to see that, because a statusline that does not
+// run leaves no trace anywhere.
+//
+// `claude -p "/usage"` answers regardless of tile size, and answers immediately rather
+// than only once some agent has done enough work to have rate limits. That costs one
+// short background session per refresh, which is why this is every 5 minutes and not
+// every 5 seconds.
+//
+// The probe still runs (it silences the bar, which is the other half of the ask) and
+// still files exact epoch resets when a tile IS tall enough — that data is better, free,
+// and simply preferred when it is fresh.
+const USAGE_EVERY = 5 * 60_000;
+
+// `/usage` prints the reset as prose in the user's own timezone — "Jul 17 at 2:20pm" —
+// but the footer wants what the statusline gave: a countdown. So turn it back into an
+// epoch. The year is not in the string; if the date reads as already past, it is next
+// year (which only ever matters across new year, and silently would have been wrong).
+const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+function parseResetAt(text) {
+  const m = String(text || '').match(/([A-Za-z]{3})[a-z]*\s+(\d{1,2})\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+  if (!m) return 0;
+  const mon = MONTHS[m[1].toLowerCase()];
+  if (mon === undefined) return 0;
+  let hour = Number(m[3]) % 12;
+  if (/pm/i.test(m[5])) hour += 12;
+  const now = new Date();
+  let d = new Date(now.getFullYear(), mon, Number(m[2]), hour, Number(m[4] || 0), 0, 0);
+  if (d.getTime() < now.getTime() - 86400_000) d = new Date(now.getFullYear() + 1, mon, Number(m[2]), hour, Number(m[4] || 0), 0, 0);
+  return Math.floor(d.getTime() / 1000);
+}
+
+// "Current session: 38% used · resets Jul 17 at 2:20pm (Europe/Istanbul)"
+// "Current week (all models): 30% used · resets Jul 21 at 3pm (Europe/Istanbul)"
+function parseUsage(text) {
+  const grab = (re) => {
+    const m = text.match(re);
+    if (!m) return null;
+    const resets_text = (m[2] || '').trim();
+    return { pct: Math.round(Number(m[1])), resets_text, resets_at: parseResetAt(resets_text) };
+  };
+  return {
+    five_hour: grab(/Current session:\s*([\d.]+)%\s*used(?:\s*·\s*resets\s+([^(\n]+))?/i),
+    seven_day: grab(/Current week \(all models\):\s*([\d.]+)%\s*used(?:\s*·\s*resets\s+([^(\n]+))?/i),
+  };
+}
+
+let usageTimer = null;
+async function refreshUsage() {
+  const bin = await findClaude();
+  if (!bin) return;
+  const env = await loginEnv();
+  execFile(bin, ['-p', '/usage'], { env, timeout: 60_000, cwd: os.homedir() }, (err, stdout) => {
+    if (err) return;
+    const u = parseUsage(String(stdout || ''));
+    if (!u.five_hour && !u.seven_day) return;
+    const prev = readUsage();
+    // The probe's epoch resets beat parsed prose when they are recent.
+    const fresh = prev && Date.now() - (prev.ts || 0) < 90_000;
+    const merge = (a, b) => (fresh && b?.resets_at ? { ...a, resets_at: b.resets_at } : a);
+    writeUsage({
+      five_hour: merge(u.five_hour, prev?.five_hour),
+      seven_day: merge(u.seven_day, prev?.seven_day),
+      ts: Date.now(),
+    });
+  });
+}
+
+function writeUsage(u) {
+  try {
+    fs.mkdirSync(path.dirname(usageFile()), { recursive: true });
+    fs.writeFileSync(usageFile(), JSON.stringify(u));
+    send('usage', u);
+  } catch { /* the footer will just keep the last thing it had */ }
+}
+
+// The probe rewrites usage.json every time a tall tile's session ticks. Watch it rather
+// than poll it.
+function readUsage() {
+  try { return JSON.parse(fs.readFileSync(usageFile(), 'utf8')); } catch { return null; }
+}
+
+let usageWatcher = null;
+function watchUsage() {
+  const f = usageFile();
+  try {
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    if (!fs.existsSync(f)) fs.writeFileSync(f, JSON.stringify({ five_hour: null, seven_day: null, ts: 0 }));
+    usageWatcher?.close();
+    let last = 0;
+    usageWatcher = fs.watch(f, () => {
+      const now = Date.now();
+      if (now - last < 200) return;      // nine writers, one footer: coalesce
+      last = now;
+      send('usage', readUsage());
+    });
+  } catch { /* no watcher: the renderer still gets it on demand */ }
+}
+
+ipcMain.handle('usage:get', () => readUsage());
+
 ipcMain.handle('state:load', () => loadState());
 ipcMain.handle('state:save', (_e, state) => { saveState(state); return { ok: true }; });
 ipcMain.handle('open-folder', (_e, { cwd }) => shell.openPath(cwd));
 
 // ── Window ───────────────────────────────────────────────────────────────────
+// The logo, in the Dock. A packaged .app gets build/icon.icns from electron-builder, but
+// `npm start` shows Electron's own icon unless we say otherwise — and "the icon is only
+// right in the release build" is the kind of thing nobody notices until it ships.
+function setDockIcon() {
+  if (process.platform !== 'darwin' || !app.dock) return;
+  for (const p of [path.join(__dirname, '..', 'build', 'icon-1024.png'), path.join(__dirname, '..', 'build', 'icon.icns')]) {
+    try { if (fs.existsSync(p)) { app.dock.setIcon(p); return; } } catch { /* keep the default */ }
+  }
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1440,
@@ -231,8 +400,12 @@ function maybeShoot() {
 }
 
 app.whenReady().then(() => {
+  setDockIcon();
   createWindow();
   maybeShoot();
+  watchUsage();
+  refreshUsage();
+  usageTimer = setInterval(refreshUsage, USAGE_EVERY);
   findClaude();   // warm the lookup so the first + is not the thing that waits on a shell
   loginEnv();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

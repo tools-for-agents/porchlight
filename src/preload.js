@@ -8,6 +8,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('hangar', {
+  // test hook: HANGAR_ZOOM=<bayId> npm start  → boots with that bay zoomed, so the
+  // screenshot harness can photograph a state that otherwise needs a click.
+  zoomAtBoot: process.env.HANGAR_ZOOM || null,
+
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
 
   start: (id, cwd, cols, rows) => ipcRenderer.invoke('bay:start', { id, cwd, cols, rows }),
@@ -16,6 +20,9 @@ contextBridge.exposeInMainWorld('hangar', {
   resize: (id, cols, rows) => ipcRenderer.send('bay:resize', { id, cols, rows }),
   buffer: (id) => ipcRenderer.invoke('bay:buffer', { id }),
   isRunning: (id) => ipcRenderer.invoke('bay:running', { id }),
+
+  usage: () => ipcRenderer.invoke('usage:get'),
+  onUsage: (fn) => ipcRenderer.on('usage', (_e, p) => fn(p)),
 
   loadState: () => ipcRenderer.invoke('state:load'),
   saveState: (state) => ipcRenderer.invoke('state:save', state),

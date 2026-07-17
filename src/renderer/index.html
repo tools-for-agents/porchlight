@@ -12,20 +12,38 @@
 <body>
   <header id="bar">
     <div class="brand">
-      <span class="mark" aria-hidden="true"></span>
+      <img class="mark" src="../../docs/logo.svg" alt="" width="20" height="20">
       <span class="word">hangar</span>
-      <span class="eyebrow">nine bays · <code>claude --dangerously-skip-permissions</code></span>
     </div>
 
     <nav id="pages" aria-label="Pages"></nav>
-
-    <div class="bar-right">
-      <span id="count" class="count" aria-live="polite">0 running</span>
-      <button id="killall" class="ghost" title="Stop every running agent">stop all</button>
-    </div>
   </header>
 
   <main id="grid" aria-label="Bays"></main>
+
+  <!-- The footer carries what the tiles used to repeat nine times. -->
+  <footer id="foot">
+    <div id="usage" class="usage" aria-live="polite">
+      <span class="meter" id="m5">
+        <span class="mlabel">5h</span>
+        <span class="bar"><span class="fill"></span></span>
+        <span class="pct">—</span>
+        <span class="reset"></span>
+      </span>
+      <span class="meter" id="m7">
+        <span class="mlabel">7d</span>
+        <span class="bar"><span class="fill"></span></span>
+        <span class="pct">—</span>
+        <span class="reset"></span>
+      </span>
+      <span class="usage-note" id="unote">start a bay to read your limits</span>
+    </div>
+
+    <div class="foot-right">
+      <span id="count" class="count">0 running</span>
+      <button id="killall" class="ghost" title="Stop every running agent">stop all</button>
+    </div>
+  </footer>
 
   <!-- One template, nine bays. A bay is empty (a +) or filled (a terminal). -->
   <template id="bay-tpl">
@@ -40,6 +58,7 @@
           <span class="dot" aria-hidden="true"></span>
           <span class="title"></span>
           <div class="acts">
+            <button class="act zoom" type="button" title="Zoom this bay (esc to come back)" aria-label="Zoom this bay">⤢</button>
             <button class="act reveal" type="button" title="Show folder in Finder" aria-label="Show folder in Finder">↗</button>
             <button class="act restart" type="button" title="Restart the agent" aria-label="Restart the agent">⟳</button>
             <button class="act close" type="button" title="Stop and empty this bay" aria-label="Stop and empty this bay">✕</button>

@@ -14,6 +14,7 @@
   --green: #4ade80;
   --amber: #fbbf24;
   --red: #f87171;
+  --cyan: #67e8f9;
   --radius: 12px;
   --shadow: 0 6px 24px rgba(0, 0, 0, .35);
 }
@@ -26,7 +27,7 @@ body {
   color: var(--txt);
   font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;   /* bar · grid · footer */
   height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
@@ -45,20 +46,9 @@ body {
 #bar button, #bar nav { -webkit-app-region: no-drag; }
 
 .brand { display: flex; align-items: baseline; gap: 8px; }
-.mark {
-  width: 12px; height: 12px; border-radius: 4px; align-self: center;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  box-shadow: 0 0 12px rgba(110, 168, 254, .5);
-}
+.mark { width: 20px; height: 20px; align-self: center; display: block; }
 .word { font-size: 14px; font-weight: 650; letter-spacing: .01em; }
-.eyebrow { font-size: 12px; color: var(--muted); }
-.eyebrow code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  color: var(--amber);
-}
-
-#pages { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+#pages { display: flex; align-items: center; gap: 4px; }
 .page-btn {
   min-width: 28px; height: 24px; padding: 0 8px;
   border-radius: 8px; border: 1px solid var(--line);
@@ -75,7 +65,7 @@ body {
   width: 4px; height: 4px; border-radius: 999px; background: var(--green); margin-left: 4px;
 }
 
-.bar-right { display: flex; align-items: center; gap: 8px; }
+.foot-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .ghost {
   height: 24px; padding: 0 8px;
@@ -184,3 +174,76 @@ body {
 
 /* the node xterm owns; the tile is re-created every render, this is not */
 .xterm-host { height: 100%; }
+
+/* ── pages you can close ─────────────────────────────────────────────────── */
+/* The page button holds its own ✕. It only appears on hover/focus of the tab, and
+   only when there is more than one page — a lone page has nothing to fall back to. */
+.page-btn { position: relative; padding-right: 8px; }
+.page-btn.closable { padding-right: 22px; }
+.page-x {
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  width: 16px; height: 16px; border-radius: 4px; padding: 0;
+  display: none; place-items: center;
+  border: 0; background: transparent; color: var(--muted);
+  font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+}
+.page-btn:hover .page-x, .page-btn:focus-within .page-x { display: grid; }
+.page-x:hover { color: var(--red); background: rgba(248, 113, 113, .14); }
+
+/* ── every bay its own colour ────────────────────────────────────────────── */
+/* --bay-c is set per tile in JS. The head is a wash of it over the panel rather than
+   the colour itself: the title stays --txt on a dark ground, so nine different hues
+   cannot quietly cost nine different contrast ratios. */
+.live .head {
+  background: color-mix(in srgb, var(--bay-c, var(--accent)) 16%, var(--panel));
+  border-bottom: 1px solid color-mix(in srgb, var(--bay-c, var(--accent)) 38%, var(--line));
+  box-shadow: inset 0 2px 0 0 var(--bay-c, var(--accent));
+}
+.live .title { color: var(--txt); }
+.bay.busy { border-color: color-mix(in srgb, var(--bay-c, var(--accent)) 45%, var(--line)); }
+.dot.running {
+  background: var(--bay-c, var(--green));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--bay-c, var(--green)) 60%, transparent);
+}
+
+/* ── the footer ──────────────────────────────────────────────────────────── */
+#foot {
+  display: flex; align-items: center; gap: 20px;
+  padding: 8px 20px;
+  border-top: 1px solid var(--line);
+  background: rgba(11, 14, 20, .72);
+  backdrop-filter: blur(12px);
+  font-size: 12px;
+}
+.usage { display: flex; align-items: center; gap: 20px; min-width: 0; }
+.meter { display: flex; align-items: center; gap: 8px; }
+.meter[hidden] { display: none; }
+.mlabel { color: var(--muted); font-variant-numeric: tabular-nums; }
+/* 10 cells, like the statusline this replaces */
+.bar {
+  width: 80px; height: 8px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--line);
+  overflow: hidden; display: block;
+}
+.fill { display: block; height: 100%; width: 0; background: var(--green); transition: width .3s, background .3s; }
+.meter.warn .fill { background: var(--amber); }
+.meter.hot .fill { background: var(--red); }
+.pct { font-variant-numeric: tabular-nums; min-width: 32px; }
+.meter.warn .pct { color: var(--amber); }
+.meter.hot .pct { color: var(--red); }
+/* The countdown, in the cyan ~/.claude/statusline.sh always gave it — this footer is
+   that bar, moved, so it should not need a second language to be read in. */
+.reset { color: var(--cyan); font-variant-numeric: tabular-nums; }
+.usage-note { color: var(--muted); }
+.usage-note[hidden] { display: none; }
+
+/* ── zoom ────────────────────────────────────────────────────────────────── */
+/* Nine live TUIs on one screen is twelve rows each: enough to SEE that an agent is
+   working, not enough to work WITH it. Rather than shrink the type until nothing is
+   readable, let one bay take the whole grid — ⤢, or double-click its title bar, or esc
+   to come back. The other eight keep running; only their tiles are hidden. */
+#grid.zoomed { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+#grid.zoomed .bay { display: none; }
+#grid.zoomed .bay.zoom { display: block; }
+.act.zoom { font-size: 11px; }
+.bay.zoom .act.zoom { color: var(--accent); }
