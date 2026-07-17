@@ -1,0 +1,80 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  # hangar had NO CI AT ALL. It is the one repo in this kit that cannot be tested the way the
+  # others are: it is an Electron app, its whole job is to spawn `claude` in a folder and put a
+  # live TTY in a tile, and none of that exists on a headless Linux runner.
+  #
+  # So it was left with nothing — and "we cannot test the terminal" quietly became "we cannot
+  # test anything", including the part that ALREADY DESTROYED A USER'S WORK: the code that
+  # decides whether a state file can be trusted. That code is now in src/state.js, which takes a
+  # directory and knows nothing about Electron, so `node --test` can hold the whole of it.
+  #
+  # This gate does not pretend to render a window. It checks the two things that are checkable
+  # and were not being checked: does the code parse, and does the file that remembers your bays
+  # still refuse to overwrite them.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      # No `npm ci`: postinstall runs electron-rebuild against node-pty, which needs an Electron
+      # download and a compiler, and none of that is needed to test a JSON file's rules. The
+      # tests import src/state.js directly, which requires nothing but node:fs and node:path.
+      - name: the state file's rules — the bug that cost a user seven bays
+        run: |
+          node --test 2>&1 | tee "$RUNNER_TEMP/test.txt"
+          code=${PIPESTATUS[0]}
+          test "$code" -eq 0 || exit $code
+          # IN CI, A SKIPPED TEST IS A FAILED TEST. Everything these tests need is here — a skip
+          # means a guard misfired, and nobody reads "skipped".
+          n=$(grep -oE '^. skipped [0-9]+' "$RUNNER_TEMP/test.txt" | grep -oE '[0-9]+$' | head -1)
+          if [ "${n:-0}" -ne 0 ]; then
+            echo "::error::${n} test(s) skipped in CI. A skip here means a guard fired that should not have."
+            exit 1
+          fi
+
+  # A syntax error in main.js does not fail a test — nothing imports it without Electron — so it
+  # would ship, and the first anyone would know is a window that never opens. `node --check` is
+  # the cheapest gate in the kit and it earns its place: it caught a duplicate `BAYS_PER_PAGE`
+  # the moment state.js was extracted, one minute after the extraction.
+  parse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: every file must at least parse
+        run: |
+          fail=0
+          for f in $(git ls-files '*.js' | grep -v node_modules); do
+            node --check "$f" || { echo "::error file=$f::$f does not parse"; fail=1; }
+          done
+          exit $fail
+
+  # 🔑 THE ONE THING A BAY RUNS, AND THE ONE THING THAT MUST NEVER DRIFT.
+  #
+  # A bay runs `claude --dangerously-skip-permissions`. That is a deliberate, owner-chosen
+  # decision, and it is safe ONLY because it is a constant in main.js that the renderer cannot
+  # reach: a UI bug cannot become a shell. If that ever becomes renderer-supplied, the app stops
+  # being a launcher and becomes a way to run anything a page can type. Nothing else in this repo
+  # would notice; this does.
+  no-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the command a bay runs is a constant, not an input
+        run: |
+          grep -q "^const CLAUDE_ARGS = \['--dangerously-skip-permissions'\];" src/main.js \
+            || { echo "::error::CLAUDE_ARGS is not the constant it must be — read the comment above it in src/main.js"; exit 1; }
+          # The renderer must never be able to name the binary or the args.
+          if grep -nE "pty\.spawn\([^b]" src/main.js | grep -v "pty.spawn(bin"; then
+            echo "::error::pty.spawn() is being handed something other than the resolved `bin` — a tile must not be able to choose what runs"
+            exit 1
+          fi

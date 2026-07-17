@@ -6,6 +6,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const pty = require('node-pty');
+const { stateStore, BAYS_PER_PAGE } = require('./state.js');
 
 // ── What a bay actually runs ─────────────────────────────────────────────────
 // The whole app is a launcher for exactly this. It is written here, once, in the open,
@@ -16,7 +17,8 @@ const pty = require('node-pty');
 // ONLY statusLine, for these sessions, and touches no file the user owns.
 const CLAUDE_ARGS = ['--dangerously-skip-permissions'];
 
-const BAYS_PER_PAGE = 9;
+// BAYS_PER_PAGE comes from state.js — the grid's size and the shape of the file that
+// remembers it are one fact, and two copies of a constant is how they stop being one.
 const MAX_SCROLLBACK = 200_000;   // chars kept per bay, so a chatty agent cannot eat the heap
 
 const usageFile = () => path.join(app.getPath('userData'), 'usage.json');
@@ -137,69 +139,14 @@ function loginEnv() {
 }
 
 // ── State: which bay points at which folder ──────────────────────────────────
-// Only paths and titles. No secrets pass through here — the agent authenticates itself
-// with your own ~/.claude, exactly as it does in a terminal.
-const stateFile = () => path.join(app.getPath('userData'), 'state.json');
-
-const backupFile = () => path.join(app.getPath('userData'), 'state.bak.json');
-
-// 🔑 A FAILED READ MUST NEVER CAUSE A WRITE.
-//
-// This lost a real user's bays. loadState() swallowed a parse error and returned an empty
-// default; the renderer then stamped ids on that default's pages and called save() — and
-// the empty default landed on top of seven bays somebody had actually set up. Two bugs
-// holding hands:
-//
-//   1. saveState wrote in place, so a reader could catch a half-written file and throw.
-//   2. loadState reported "I could not read it" and "there is nothing here" with the same
-//      value, so the caller could not tell the difference and saved over the wreckage.
-//
-// Now: writes are atomic (tmp + rename, so a reader sees old or new, never half), the last
-// good state is kept beside it, and a read that FAILS says so — `ok:false` — which the
-// renderer treats as "show a clean grid but do not write anything until the user acts".
-// An unreadable file is also copied aside rather than overwritten, because it is the only
-// copy of something that mattered.
-function loadState() {
-  const empty = { pages: [{ id: 'pg_1', bays: Array(BAYS_PER_PAGE).fill(null) }] };
-  const read = (f) => {
-    const s = JSON.parse(fs.readFileSync(f, 'utf8'));
-    if (!Array.isArray(s?.pages) || !s.pages.length) throw new Error('no pages');
-    return s;
-  };
-
-  try {
-    const s = read(stateFile());
-    dbg(`loadState: ${stateFile()} — ${s.pages.length} page(s)`);
-    return { ...s, ok: true };
-  } catch (e) {
-    if (!fs.existsSync(stateFile())) {
-      dbg('loadState: no state file — first run');
-      return { ...empty, ok: true };   // genuinely a first run
-    }
-    dbg(`loadState: UNREADABLE (${e?.message || e}) — trying the backup`);
-    // The file is there and unreadable. Try the backup before giving up on someone's work.
-    try {
-      const b = read(backupFile());
-      try { fs.copyFileSync(stateFile(), `${stateFile()}.corrupt`); } catch { /* best effort */ }
-      dbg(`loadState: recovered ${b.pages.length} page(s) from the backup`);
-      return { ...b, ok: true, recovered: true };
-    } catch { /* no usable backup either */ }
-    try { fs.copyFileSync(stateFile(), `${stateFile()}.corrupt`); } catch { /* best effort */ }
-    dbg('loadState: no usable backup — ok:false, the renderer must not write over this');
-    return { ...empty, ok: false, error: String(e?.message || e) };
-  }
-}
-
-function saveState(state) {
-  try {
-    fs.mkdirSync(path.dirname(stateFile()), { recursive: true });
-    // keep the last good one before replacing it
-    try { if (fs.existsSync(stateFile())) fs.copyFileSync(stateFile(), backupFile()); } catch { /* best effort */ }
-    const tmp = `${stateFile()}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
-    fs.renameSync(tmp, stateFile());          // atomic: a reader sees old or new
-  } catch { /* a launcher that cannot remember is still a launcher */ }
-}
+// The rules (a failed read must never cause a write; writes are atomic; the last good copy
+// is kept) live in src/state.js, which takes a directory and knows nothing about Electron —
+// so the code that once lost somebody's bays can be tested by `node --test`, without a
+// window. `app` is only consulted for WHERE, and only once the app is ready.
+let store = null;
+const state = () => (store ??= stateStore(app.getPath('userData'), dbg));
+const loadState = () => state().load();
+const saveState = (s) => state().save(s);
 
 // ── Bays ─────────────────────────────────────────────────────────────────────
 function send(channel, payload) {
