@@ -1,67 +1,61 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="hangar">
   <title>hangar</title>
   <!--
-    hangar's mark: a lit hangar door with nine bays, one of them running.
+    Black and green: a lit hangar door, nine bays, one running.
 
-    Built to Apple's icon grid, not to the edge of the canvas: a 1024 square with the
-    artwork as an 824 squircle inset 100 on every side. The first version was a dark
-    outline at near-full-bleed on a transparent canvas — which in the Dock, against a
-    dark wallpaper, was a smudge with a white box behind it (capturePage bakes the
-    window background in; that is fixed in scripts/render-logo.js).
+    Apple's grid — an 824 squircle inset 100 in a 1024 canvas — so it sits in the Dock
+    like everything else rather than filling its own square.
 
-    It has to survive 32px in the Dock and 20px in the app's own title bar, so: one
-    silhouette, one accent, no hairlines. The arch is a solid white plate rather than a
-    stroke, the bays are punched THROUGH it (so they read as openings, not as dots), and
-    the live bay is the same green a running agent gets in the UI. At 32px you still see
-    a door with a green light in it, which is the whole product in one glance.
+    The colour does the talking: the body is near-black with a green rim, the door is
+    drawn in phosphor green, and the one live bay is the only fully-lit thing in the
+    picture. That is the product — eight bays waiting, one working — and it is also the
+    app's own palette, so the icon and the window mean the same thing by the same rule.
+
+    It has to survive 32px in the Dock and 20px in the title bar, so: one silhouette, one
+    accent, no hairlines. The door is a thick stroke, the bays are solid, and the live one
+    glows. At 32px you still read a door with a green light in it.
   -->
   <defs>
-    <!-- the kit's accent → accent-2, deepened so white sits at 8:1 on top of it -->
-    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#4f7cf7"/>
-      <stop offset="1" stop-color="#8b5cf6"/>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e1512"/>
+      <stop offset="1" stop-color="#040605"/>
     </linearGradient>
-    <!-- the light every macOS icon has coming from above -->
-    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity=".22"/>
-      <stop offset=".5" stop-color="#ffffff" stop-opacity="0"/>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4ade80" stop-opacity=".85"/>
+      <stop offset="1" stop-color="#16a34a" stop-opacity=".35"/>
     </linearGradient>
-    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#dfe7ff"/>
-    </linearGradient>
-
-    <!-- Punch the bays out of the door instead of drawing them on it. -->
-    <mask id="bays">
-      <rect x="0" y="0" width="1024" height="1024" fill="#000"/>
-      <path d="M296 736 V472 a216 216 0 0 1 432 0 V736 a24 24 0 0 1 -24 24 H320 a24 24 0 0 1 -24 -24 Z" fill="#fff"/>
-      <g fill="#000">
-        <rect x="360" y="424" width="88" height="88" rx="26"/>
-        <rect x="468" y="424" width="88" height="88" rx="26"/>
-        <rect x="576" y="424" width="88" height="88" rx="26"/>
-        <rect x="360" y="532" width="88" height="88" rx="26"/>
-        <rect x="468" y="532" width="88" height="88" rx="26"/>
-        <rect x="576" y="532" width="88" height="88" rx="26"/>
-        <rect x="360" y="640" width="88" height="88" rx="26"/>
-        <rect x="468" y="640" width="88" height="88" rx="26"/>
-        <rect x="576" y="640" width="88" height="88" rx="26"/>
-      </g>
-    </mask>
+    <!-- A glow that bleeds over its neighbours stops being "one bay is lit" and becomes
+         a smudge — especially small, where the 20px gaps are already sub-pixel. Tight. -->
+    <filter id="lit" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="13" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
 
-  <!-- the squircle: 824 on a 1024 canvas, inset 100, r=185 (Apple's proportion) -->
+  <!-- body -->
   <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#body)"/>
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#sheen)"/>
+  <rect x="112" y="112" width="800" height="800" rx="173" fill="none" stroke="url(#rim)" stroke-width="10"/>
 
-  <!-- the door, with nine openings cut through it -->
-  <g mask="url(#bays)">
-    <path d="M296 736 V472 a216 216 0 0 1 432 0 V736 a24 24 0 0 1 -24 24 H320 a24 24 0 0 1 -24 -24 Z" fill="url(#plate)"/>
+  <!-- the door -->
+  <path d="M300 740 V486 a212 212 0 0 1 424 0 V740"
+        fill="none" stroke="#22c55e" stroke-width="26" stroke-linecap="round"/>
+  <!-- the floor it stands on -->
+  <rect x="276" y="742" width="472" height="20" rx="10" fill="#4ade80"/>
+
+  <!-- eight waiting -->
+  <g fill="#22c55e" opacity=".5">
+    <rect x="372" y="446" width="80" height="80" rx="24"/>
+    <rect x="472" y="446" width="80" height="80" rx="24"/>
+    <rect x="572" y="446" width="80" height="80" rx="24"/>
+    <rect x="372" y="546" width="80" height="80" rx="24"/>
+    <rect x="572" y="546" width="80" height="80" rx="24"/>
+    <rect x="372" y="646" width="80" height="80" rx="24"/>
+    <rect x="472" y="646" width="80" height="80" rx="24"/>
+    <rect x="572" y="646" width="80" height="80" rx="24"/>
   </g>
 
-  <!-- the one that is running -->
-  <rect x="468" y="532" width="88" height="88" rx="26" fill="#22c55e"/>
-  <rect x="468" y="532" width="88" height="88" rx="26" fill="#4ade80" opacity=".55"/>
-
-  <!-- floor line: gives the door somewhere to stand -->
-  <rect x="296" y="748" width="432" height="12" rx="6" fill="#ffffff" opacity=".9"/>
+  <!-- one running -->
+  <g filter="url(#lit)">
+    <rect x="472" y="546" width="80" height="80" rx="24" fill="#4ade80"/>
+  </g>
 </svg>

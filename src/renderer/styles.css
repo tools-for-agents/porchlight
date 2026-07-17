@@ -2,28 +2,31 @@
    Values that are not in iris/tokens.json are drift; there is a gate for that in the kit
    and this file is meant to survive it. */
 :root {
-  --bg: #0b0e14;
-  --panel: #131823;
-  --panel-2: #1a2030;
-  --line: #232b3d;
-  --line-2: #2f3852;
-  --txt: #e6ebf5;
-  --muted: #8a96ad;
-  --accent: #6ea8fe;
-  --accent-2: #a78bfa;
+  /* Black and green. The kit's 4px grid and type scale still apply; the palette is
+     hangar's own, because a wall of terminals should look like terminals — and the icon
+     is the same two colours, so the Dock and the window agree. */
+  --bg: #050807;
+  --panel: #0b100d;
+  --panel-2: #131a16;
+  --line: #1d2721;
+  --line-2: #2c3a33;
+  --txt: #e8f5ee;
+  --muted: #7d9188;
+  --accent: #4ade80;          /* green: the one thing that means "running" */
+  --accent-2: #22c55e;
   --green: #4ade80;
   --amber: #fbbf24;
   --red: #f87171;
-  --cyan: #67e8f9;
+  --cyan: #5eead4;
   --radius: 12px;
-  --shadow: 0 6px 24px rgba(0, 0, 0, .35);
+  --shadow: 0 6px 24px rgba(0, 0, 0, .55);
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; }
 
 body {
-  background: radial-gradient(1200px 600px at 80% -10%, #16213a 0%, var(--bg) 55%) fixed;
+  background: radial-gradient(1100px 560px at 82% -12%, #0d1f16 0%, var(--bg) 58%) fixed;
   color: var(--txt);
   font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   display: grid;
@@ -39,14 +42,14 @@ body {
   gap: 20px;
   padding: 12px 20px 12px 92px;   /* room for the traffic lights */
   border-bottom: 1px solid var(--line);
-  background: rgba(11, 14, 20, .72);
+  background: rgba(5, 8, 7, .74);
   backdrop-filter: blur(12px);
   -webkit-app-region: drag;        /* the bar IS the title bar */
 }
 #bar button, #bar nav { -webkit-app-region: no-drag; }
 
 .brand { display: flex; align-items: baseline; gap: 8px; }
-.mark { width: 20px; height: 20px; align-self: center; display: block; }
+.mark { width: 22px; height: 22px; align-self: center; display: block; }
 .word { font-size: 14px; font-weight: 650; letter-spacing: .01em; }
 #pages { display: flex; align-items: center; gap: 4px; }
 .page-btn {
@@ -58,7 +61,7 @@ body {
   transition: color .12s, border-color .12s, background .12s;
 }
 .page-btn:hover { color: var(--txt); border-color: var(--line); background: var(--panel-2); }
-.page-btn.on { color: var(--txt); border-color: var(--accent); background: rgba(110, 168, 254, .12); }
+.page-btn.on { color: var(--txt); border-color: var(--accent); background: rgba(74, 222, 128, .12); }
 .page-btn .n { font-variant-numeric: tabular-nums; }
 /* a page with agents on it says so, without stealing the eye */
 .page-btn .live-dot {
@@ -94,9 +97,18 @@ body {
   border-radius: var(--radius);
   background: var(--panel);
   overflow: hidden;
-  transition: border-color .12s;
+  transition: border-color .12s, background .12s;
 }
-.bay:has(.live:not([hidden])) { background: #0d1117; }
+/* An empty bay is a SLOT, not a broken tile. Seven of nine are empty on a fresh grid, and
+   as solid panels they read as dead weight — a dashed edge says "something goes here" in
+   the one glance you give it. :has() so the dash belongs to the bay, not to the button. */
+.bay:has(.plus:not([hidden])) {
+  border-style: dashed;
+  border-color: var(--line);
+  background: transparent;
+}
+.bay:has(.plus:not([hidden])):hover { border-color: var(--accent-2); }
+.bay:has(.live:not([hidden])) { background: #050807; }
 .bay.busy { border-color: rgba(110, 168, 254, .45); }
 
 /* 🔑 SAY THIS OUT LOUD OR `hidden` DOES NOTHING.
@@ -116,10 +128,10 @@ body {
   color: var(--muted); font: inherit;
   transition: background .12s, color .12s;
 }
-.plus:hover { background: var(--panel-2); color: var(--txt); }
+.plus:hover { background: rgba(74, 222, 128, .05); color: var(--txt); }
 .plus:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
 .plus-glyph {
-  width: 40px; height: 40px; border-radius: 999px;
+  width: 44px; height: 44px; border-radius: 999px;
   display: grid; place-items: center;
   font-size: 24px; line-height: 1;
   border: 1px solid var(--line);
@@ -134,6 +146,7 @@ body {
 .head {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 8px 8px 12px;
+  min-height: 36px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
 }
@@ -145,7 +158,6 @@ body {
 .dot.exited { background: var(--red); }
 .title {
   flex: 1; min-width: 0;
-  font-size: 12px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .acts { display: flex; gap: 4px; flex: none; }
@@ -194,12 +206,21 @@ body {
 /* --bay-c is set per tile in JS. The head is a wash of it over the panel rather than
    the colour itself: the title stays --txt on a dark ground, so nine different hues
    cannot quietly cost nine different contrast ratios. */
+/* The head is nearly black and the colour is an EDGE, not a wash: on this palette a
+   tinted bar just greys the title down. The bay's hue lives in the top rule and the dot,
+   where it identifies without costing legibility. */
 .live .head {
-  background: color-mix(in srgb, var(--bay-c, var(--accent)) 16%, var(--panel));
-  border-bottom: 1px solid color-mix(in srgb, var(--bay-c, var(--accent)) 38%, var(--line));
+  background: color-mix(in srgb, var(--bay-c, var(--accent)) 8%, var(--panel));
+  border-bottom: 1px solid color-mix(in srgb, var(--bay-c, var(--accent)) 30%, var(--line));
   box-shadow: inset 0 2px 0 0 var(--bay-c, var(--accent));
 }
-.live .title { color: var(--txt); }
+/* 14px/700 on near-black: the folder name is the one word you scan nine of. */
+.live .title {
+  color: var(--txt);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .01em;
+}
 .bay.busy { border-color: color-mix(in srgb, var(--bay-c, var(--accent)) 45%, var(--line)); }
 .dot.running {
   background: var(--bay-c, var(--green));
@@ -211,7 +232,7 @@ body {
   display: flex; align-items: center; gap: 20px;
   padding: 8px 20px;
   border-top: 1px solid var(--line);
-  background: rgba(11, 14, 20, .72);
+  background: rgba(5, 8, 7, .74);
   backdrop-filter: blur(12px);
   font-size: 12px;
 }

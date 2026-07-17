@@ -81,9 +81,15 @@ stops every agent it started.
 
 ## Why it looks like this
 
-hangar is part of [tools-for-agents](https://github.com/tools-for-agents) and uses the kit's
-palette, 4px grid and type scale — the same design system [iris](https://github.com/tools-for-agents/iris)
-gates the other tools against.
+Black and green, because a wall of terminals should look like terminals. The icon is the
+same two colours as the window — a lit door with nine bays and one running — so the Dock
+and the app say the same thing.
+
+Colour means one thing here: **green is running.** Each bay also carries its own hue, but
+only as an edge and a dot — the title stays white on near-black, because a tinted title bar
+greys down the one word you scan nine of. hangar is part of
+[tools-for-agents](https://github.com/tools-for-agents) and keeps the kit's 4px grid and
+type scale — the palette is its own.
 
 ## The footer, and the bar that is not there
 

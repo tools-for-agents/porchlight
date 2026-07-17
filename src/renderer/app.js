@@ -35,29 +35,36 @@ const newPageId = () => `pg_${Math.random().toString(36).slice(2, 10)}`;
 // Nine bays, nine hues, fixed to the slot so a bay's colour never moves under you.
 // Slot-based rather than hashed from the folder: with nine of them a hash collides and
 // two neighbours go the same colour, which is the one thing this has to never do.
+// Green leads — bay 1 is the app's own accent — and the rest fan out around it. Tuned
+// bright, because on a black ground a mid-tone hue in a 1px edge simply disappears.
 const BAY_COLORS = [
-  '#6ea8fe', // blue
-  '#a78bfa', // violet
   '#4ade80', // green
+  '#5eead4', // teal
+  '#7dd3fc', // sky
+  '#c4b5fd', // violet
+  '#f0abfc', // orchid
+  '#fda4af', // rose
   '#fbbf24', // amber
-  '#f472b6', // pink
-  '#22d3ee', // cyan
-  '#fb923c', // orange
   '#a3e635', // lime
-  '#f87171', // red
+  '#fb923c', // orange
 ];
 const bayColor = (slot) => BAY_COLORS[slot % BAY_COLORS.length];
 
+// The terminal is the app; it should not look like a guest in it. Black ground, the
+// app's own green cursor, and ANSI colours tuned to stay legible on it — claude paints
+// its TUI with these, so they are the difference between a wall of terminals that reads
+// and one that fights you.
 const theme = {
-  background: '#0d1117',
-  foreground: '#e6ebf5',
-  cursor: '#6ea8fe',
-  selectionBackground: 'rgba(110,168,254,.3)',
-  black: '#0b0e14', red: '#f87171', green: '#4ade80', yellow: '#fbbf24',
-  blue: '#6ea8fe', magenta: '#a78bfa', cyan: '#67e8f9', white: '#e6ebf5',
-  brightBlack: '#8a96ad', brightRed: '#fca5a5', brightGreen: '#86efac',
-  brightYellow: '#fcd34d', brightBlue: '#93c5fd', brightMagenta: '#c4b5fd',
-  brightCyan: '#a5f3fc', brightWhite: '#ffffff',
+  background: '#050807',
+  foreground: '#e8f5ee',
+  cursor: '#4ade80',
+  cursorAccent: '#050807',
+  selectionBackground: 'rgba(74,222,128,.28)',
+  black: '#0b100d', red: '#f87171', green: '#4ade80', yellow: '#fbbf24',
+  blue: '#7dd3fc', magenta: '#c4b5fd', cyan: '#5eead4', white: '#e8f5ee',
+  brightBlack: '#7d9188', brightRed: '#fca5a5', brightGreen: '#86efac',
+  brightYellow: '#fcd34d', brightBlue: '#bae6fd', brightMagenta: '#ddd6fe',
+  brightCyan: '#99f6e4', brightWhite: '#ffffff',
 };
 
 // ── persistence ─────────────────────────────────────────────────────────────
@@ -73,9 +80,11 @@ function renderPages() {
     b.setAttribute('aria-label', `Page ${i + 1}`);
     if (i === pageIndex) b.setAttribute('aria-current', 'page');
 
+    // "Page 1" rather than "1": a lone digit next to a lone digit is a phone keypad, not
+    // navigation. It costs a little width and says what it is.
     const n = document.createElement('span');
     n.className = 'n';
-    n.textContent = String(i + 1);
+    n.textContent = `Page ${i + 1}`;
     b.append(n);
 
     // A page you are not looking at can still have agents on it. Say so.
