@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- No remote anything. Everything this window loads ships in the app. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:;">
+  <title>hangar</title>
+  <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="bar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <span class="word">hangar</span>
+      <span class="eyebrow">nine bays · <code>claude --dangerously-skip-permissions</code></span>
+    </div>
+
+    <nav id="pages" aria-label="Pages"></nav>
+
+    <div class="bar-right">
+      <span id="count" class="count" aria-live="polite">0 running</span>
+      <button id="killall" class="ghost" title="Stop every running agent">stop all</button>
+    </div>
+  </header>
+
+  <main id="grid" aria-label="Bays"></main>
+
+  <!-- One template, nine bays. A bay is empty (a +) or filled (a terminal). -->
+  <template id="bay-tpl">
+    <section class="bay">
+      <button class="plus" type="button">
+        <span class="plus-glyph" aria-hidden="true">+</span>
+        <span class="plus-label">pick a folder</span>
+      </button>
+
+      <div class="live" hidden>
+        <div class="head">
+          <span class="dot" aria-hidden="true"></span>
+          <span class="title"></span>
+          <div class="acts">
+            <button class="act reveal" type="button" title="Show folder in Finder" aria-label="Show folder in Finder">↗</button>
+            <button class="act restart" type="button" title="Restart the agent" aria-label="Restart the agent">⟳</button>
+            <button class="act close" type="button" title="Stop and empty this bay" aria-label="Stop and empty this bay">✕</button>
+          </div>
+        </div>
+        <div class="term"></div>
+      </div>
+    </section>
+  </template>
+
+  <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

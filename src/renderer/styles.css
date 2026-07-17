@@ -1,0 +1,186 @@
+/* hangar — the kit's palette (agent-hq's), the kit's grid (4px), the kit's type scale.
+   Values that are not in iris/tokens.json are drift; there is a gate for that in the kit
+   and this file is meant to survive it. */
+:root {
+  --bg: #0b0e14;
+  --panel: #131823;
+  --panel-2: #1a2030;
+  --line: #232b3d;
+  --line-2: #2f3852;
+  --txt: #e6ebf5;
+  --muted: #8a96ad;
+  --accent: #6ea8fe;
+  --accent-2: #a78bfa;
+  --green: #4ade80;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --radius: 12px;
+  --shadow: 0 6px 24px rgba(0, 0, 0, .35);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+
+body {
+  background: radial-gradient(1200px 600px at 80% -10%, #16213a 0%, var(--bg) 55%) fixed;
+  color: var(--txt);
+  font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── the bar ─────────────────────────────────────────────────────────────── */
+#bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 20px 12px 92px;   /* room for the traffic lights */
+  border-bottom: 1px solid var(--line);
+  background: rgba(11, 14, 20, .72);
+  backdrop-filter: blur(12px);
+  -webkit-app-region: drag;        /* the bar IS the title bar */
+}
+#bar button, #bar nav { -webkit-app-region: no-drag; }
+
+.brand { display: flex; align-items: baseline; gap: 8px; }
+.mark {
+  width: 12px; height: 12px; border-radius: 4px; align-self: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 12px rgba(110, 168, 254, .5);
+}
+.word { font-size: 14px; font-weight: 650; letter-spacing: .01em; }
+.eyebrow { font-size: 12px; color: var(--muted); }
+.eyebrow code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--amber);
+}
+
+#pages { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.page-btn {
+  min-width: 28px; height: 24px; padding: 0 8px;
+  border-radius: 8px; border: 1px solid var(--line);
+  background: transparent; color: var(--muted);
+  font: inherit; font-size: 12px; cursor: pointer;
+  display: grid; place-items: center;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.page-btn:hover { color: var(--txt); border-color: var(--line); background: var(--panel-2); }
+.page-btn.on { color: var(--txt); border-color: var(--accent); background: rgba(110, 168, 254, .12); }
+.page-btn .n { font-variant-numeric: tabular-nums; }
+/* a page with agents on it says so, without stealing the eye */
+.page-btn .live-dot {
+  width: 4px; height: 4px; border-radius: 999px; background: var(--green); margin-left: 4px;
+}
+
+.bar-right { display: flex; align-items: center; gap: 8px; }
+.count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ghost {
+  height: 24px; padding: 0 8px;
+  border-radius: 8px; border: 1px solid var(--line);
+  background: transparent; color: var(--muted);
+  font: inherit; font-size: 12px; cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.ghost:hover { color: var(--red); border-color: var(--red); }
+.ghost:disabled { opacity: 1; color: #4a5468; border-color: #1b2130; cursor: not-allowed; }
+
+/* ── the grid ────────────────────────────────────────────────────────────── */
+#grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 12px;
+  padding: 12px;
+  min-height: 0;   /* or the terminals push the grid past the window */
+}
+
+.bay {
+  position: relative;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+  transition: border-color .12s;
+}
+.bay:has(.live:not([hidden])) { background: #0d1117; }
+.bay.busy { border-color: rgba(110, 168, 254, .45); }
+
+/* 🔑 SAY THIS OUT LOUD OR `hidden` DOES NOTHING.
+   Both .plus and .live set `display`, and a display rule in a stylesheet beats the UA
+   sheet's [hidden]{display:none} every time. Without these two lines every empty bay
+   painted its status header and every running bay painted a + over its terminal — which
+   is precisely what the first screenshot showed. This is the same defect the kit keeps
+   re-finding (scout's .toc-toggle[hidden], cortex's #composer[hidden]); I wrote it down
+   an hour before writing this file, and still had to LOOK at the pixels to catch it. */
+.plus[hidden], .live[hidden] { display: none; }
+
+/* the + ------------------------------------------------------------------- */
+.plus {
+  position: absolute; inset: 0;
+  display: grid; place-items: center; align-content: center; gap: 8px;
+  border: 0; background: transparent; cursor: pointer;
+  color: var(--muted); font: inherit;
+  transition: background .12s, color .12s;
+}
+.plus:hover { background: var(--panel-2); color: var(--txt); }
+.plus:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
+.plus-glyph {
+  width: 40px; height: 40px; border-radius: 999px;
+  display: grid; place-items: center;
+  font-size: 24px; line-height: 1;
+  border: 1px solid var(--line);
+  transition: border-color .12s, transform .12s, color .12s;
+}
+.plus:hover .plus-glyph { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+.plus-label { font-size: 12px; }
+
+/* a running bay ------------------------------------------------------------ */
+.live { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+
+.head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 8px 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.dot {
+  width: 8px; height: 8px; border-radius: 999px; flex: none;
+  background: var(--muted);
+}
+.dot.running { background: var(--green); box-shadow: 0 0 8px rgba(74, 222, 128, .6); }
+.dot.exited { background: var(--red); }
+.title {
+  flex: 1; min-width: 0;
+  font-size: 12px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.acts { display: flex; gap: 4px; flex: none; }
+.act {
+  width: 24px; height: 24px;            /* the kit's minTap */
+  display: grid; place-items: center; padding: 0;
+  border-radius: 8px; border: 1px solid transparent;
+  background: transparent; color: var(--muted);
+  font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.act:hover { color: var(--txt); border-color: var(--line); background: var(--panel-2); }
+.act.close:hover { color: var(--red); border-color: var(--red); }
+
+.term { min-height: 0; padding: 4px 0 4px 8px; }
+.term .xterm { height: 100%; }
+.term .xterm-viewport { background: transparent !important; }
+.term .xterm-viewport::-webkit-scrollbar { width: 8px; }
+.term .xterm-viewport::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+.term .xterm-viewport::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+  .dot.running { box-shadow: none; }
+}
+
+/* the node xterm owns; the tile is re-created every render, this is not */
+.xterm-host { height: 100%; }
