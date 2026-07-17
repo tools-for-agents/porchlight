@@ -40,9 +40,21 @@ function claudeArgs() {
   return [...CLAUDE_ARGS, '--settings', settings];
 }
 
-/** @type {Map<string, {proc: import('node-pty').IPty, buf: string, cwd: string, exited: boolean}>} */
+/** @type {Map<string, {proc: import('node-pty').IPty, buf: string, cwd: string, exited: boolean, spoke: boolean, startedAt: number}>} */
 const bays = new Map();
 let win = null;
+
+// ── Debug ────────────────────────────────────────────────────────────────────
+// HANGAR_DEBUG=1 narrates the three things that have actually broken this app: which
+// `claude` was found, what PATH the agent got, and whether the pty ever said anything.
+//
+// 🔑 A DEBUG FLAG THAT DOES NOT EXIST IS WORSE THAN NONE. This one was written down in
+// my notes as "logs every pty data event" for a day before it was written down in the
+// source. Running with it printed nothing — against a HEALTHY app whose pty was streaming
+// fine. Silence from a flag that isn't wired is the same silence a dead pty makes, so the
+// notes handed me a confident wrong diagnosis for free. It exists now: quiet means quiet.
+const DEBUG = !!process.env.HANGAR_DEBUG;
+const dbg = (...a) => { if (DEBUG) console.log('[hangar]', ...a); };
 
 const SENTINEL = '__HANGAR_PATH__';
 const afterSentinel = (stdout) => {
@@ -70,6 +82,7 @@ function findClaude() {
     // last line only because the shell's chatter happens to come first.
     execFile(sh, ['-lic', `printf '%s' '${SENTINEL}'; command -v claude`], { timeout: 8000 }, (err, stdout) => {
       const hit = afterSentinel(stdout).split('\n').filter(Boolean).pop();
+      dbg(`findClaude: ${sh} -lic said ${JSON.stringify(hit || '')}${err ? ` (err: ${err.message})` : ''}`);
       if (!err && hit && fs.existsSync(hit)) return resolve(hit);
       // The shell could not tell us. Try the places it usually lives before giving up,
       // so a broken rc file is not fatal.
@@ -78,7 +91,9 @@ function findClaude() {
         '/opt/homebrew/bin/claude',
         '/usr/local/bin/claude',
       ];
-      resolve(guesses.find((p) => fs.existsSync(p)) || null);
+      const guessed = guesses.find((p) => fs.existsSync(p)) || null;
+      dbg(`findClaude: falling back to guesses → ${guessed || 'NOTHING FOUND'}`);
+      resolve(guessed);
     });
   });
   return claudePathPromise;
@@ -112,6 +127,9 @@ function loginEnv() {
       const p = afterSentinel(stdout);
       // Only trust something that actually looks like a PATH.
       const ok = p && p.includes('/') && !p.includes('\n');
+      dbg(ok
+        ? `loginEnv: PATH from ${sh} (${p.split(':').length} entries)`
+        : `loginEnv: REJECTED ${sh}'s answer ${JSON.stringify(p.slice(0, 80))} — keeping this process's PATH`);
       resolve({ ...process.env, ...(ok ? { PATH: p } : {}), TERM: 'xterm-256color' });
     });
   });
@@ -150,16 +168,24 @@ function loadState() {
   };
 
   try {
-    return { ...read(stateFile()), ok: true };
+    const s = read(stateFile());
+    dbg(`loadState: ${stateFile()} — ${s.pages.length} page(s)`);
+    return { ...s, ok: true };
   } catch (e) {
-    if (!fs.existsSync(stateFile())) return { ...empty, ok: true };   // genuinely a first run
+    if (!fs.existsSync(stateFile())) {
+      dbg('loadState: no state file — first run');
+      return { ...empty, ok: true };   // genuinely a first run
+    }
+    dbg(`loadState: UNREADABLE (${e?.message || e}) — trying the backup`);
     // The file is there and unreadable. Try the backup before giving up on someone's work.
     try {
       const b = read(backupFile());
       try { fs.copyFileSync(stateFile(), `${stateFile()}.corrupt`); } catch { /* best effort */ }
+      dbg(`loadState: recovered ${b.pages.length} page(s) from the backup`);
       return { ...b, ok: true, recovered: true };
     } catch { /* no usable backup either */ }
     try { fs.copyFileSync(stateFile(), `${stateFile()}.corrupt`); } catch { /* best effort */ }
+    dbg('loadState: no usable backup — ok:false, the renderer must not write over this');
     return { ...empty, ok: false, error: String(e?.message || e) };
   }
 }
@@ -212,22 +238,29 @@ async function startBay(id, cwd, cols, rows) {
       cwd,
       env,
     });
+    dbg(`bay ${id}: spawned pid ${proc.pid} — ${bin} in ${cwd} (${cols || 80}x${rows || 24})`);
   } catch (e) {
     send('bay:exit', { id, code: -1, reason: String(e?.message || e) });
     return { ok: false, error: String(e?.message || e) };
   }
 
-  const bay = { proc, buf: '', cwd, exited: false };
+  const bay = { proc, buf: '', cwd, exited: false, spoke: false, startedAt: Date.now() };
   bays.set(id, bay);
 
   proc.onData((data) => {
     bay.buf += data;
     if (bay.buf.length > MAX_SCROLLBACK) bay.buf = bay.buf.slice(-MAX_SCROLLBACK);
+    // Byte counts, not the bytes: a TUI redraws constantly and the escape codes would bury
+    // the one line you are looking for. The first event is the one that matters — it is the
+    // difference between "the agent never started" and "the terminal never drew it".
+    if (!bay.spoke) { bay.spoke = true; dbg(`bay ${id}: FIRST OUTPUT after ${Date.now() - bay.startedAt}ms`); }
+    dbg(`bay ${id}: data ${data.length}b (buf ${bay.buf.length})`);
     send('bay:data', { id, data });
   });
 
   proc.onExit(({ exitCode }) => {
     bay.exited = true;
+    dbg(`bay ${id}: exit ${exitCode}${bay.spoke ? '' : ' — NEVER PRODUCED OUTPUT'}`);
     send('bay:exit', { id, code: exitCode });
   });
 
