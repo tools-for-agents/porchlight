@@ -84,7 +84,13 @@ function stateStore(dir, dbg = () => {}, io = fs) {
       const tmp = `${stateFile()}.${process.pid}.tmp`;
       io.writeFileSync(tmp, JSON.stringify(state, null, 2));
       io.renameSync(tmp, stateFile());          // atomic: a reader sees old or new
-    } catch { /* a launcher that cannot remember is still a launcher */ }
+    } catch (e) {
+      // A launcher that cannot remember is still a launcher, so this never throws — but it must not be
+      // SILENT either. load() narrates every failure it hits; a save that vanishes into an empty catch is
+      // how "why don't my bays persist?" becomes unanswerable. It is the same module that once lost seven
+      // of somebody's bays: the least it can do when it fails to save is SAY so.
+      dbg(`saveState: FAILED (${e?.message || e}) — the bays were NOT persisted this time`);
+    }
   }
 
   return { load, save, stateFile, backupFile };

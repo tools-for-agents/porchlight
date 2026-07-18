@@ -161,6 +161,19 @@ test('a launcher that cannot write is still a launcher — save never throws', (
   }
 });
 
+// The other half of "never throws": never SILENT. load() narrates every failure; a save that fails into
+// an empty catch is how "why aren't my bays persisting?" becomes unanswerable, in the one module that has
+// already lost somebody's bays once. So a failed save must still not throw — but it must say so.
+test('a save that fails is logged, not swallowed — never throws, but never silent either', () => {
+  const dir = tmp();
+  const msgs = [];
+  const io = { ...fs, writeFileSync: () => { throw new Error('disk full'); } };   // the bytes cannot land
+  const st = stateStore(dir, (m) => msgs.push(String(m)), io);
+  assert.doesNotThrow(() => st.save(seven()), 'a failed save still must not take the app down');
+  assert.ok(msgs.some((m) => /FAILED|not persisted/i.test(m)),
+    `the failure must be visible in the debug log, like load() would — saw: ${JSON.stringify(msgs)}`);
+});
+
 test('emptyState is a real empty grid, not a shape that only looks like one', () => {
   const e = emptyState();
   assert.equal(e.pages.length, 1);
