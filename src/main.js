@@ -378,7 +378,7 @@ function createWindow() {
     height: 940,
     minWidth: 720,
     minHeight: 520,
-    backgroundColor: '#0b0d12',
+    backgroundColor: '#050807',       // --bg exactly: a mismatched value flashes for a frame before CSS paints
     titleBarStyle: 'hiddenInset',     // the grid IS the chrome
     trafficLightPosition: { x: 18, y: 22 },
     webPreferences: {

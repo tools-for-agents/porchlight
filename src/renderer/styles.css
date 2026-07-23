@@ -119,12 +119,17 @@ body {
    the one glance you give it. :has() so the dash belongs to the bay, not to the button. */
 .bay:has(.plus:not([hidden])) {
   border-style: dashed;
-  border-color: var(--line);
+  border-color: var(--line-2);        /* was --line: on this ground it read as no edge at all */
   background: transparent;
 }
-.bay:has(.plus:not([hidden])):hover { border-color: var(--accent-2); }
+.bay:has(.plus:not([hidden])):hover {
+  border-color: var(--accent-2);
+  background: rgba(74, 222, 128, .03);
+}
 .bay:has(.live:not([hidden])) { background: #050807; }
-.bay.busy { border-color: rgba(110, 168, 254, .45); }
+/* (the old `.bay.busy { border-color: rgba(110,168,254,.45) }` lived here — a blue-grey
+   stranded from agent-hq's palette that the bay-c rule below already overrode. Dead drift,
+   removed; the live rule is at the bottom with the rest of the per-bay colour.) */
 
 /* 🔑 SAY THIS OUT LOUD OR `hidden` DOES NOTHING.
    Both .plus and .live set `display`, and a display rule in a stylesheet beats the UA
@@ -139,7 +144,9 @@ body {
 .plus {
   position: absolute; inset: 0;
   display: grid; place-items: center; align-content: center; gap: 8px;
-  border: 0; background: transparent; cursor: pointer;
+  /* a bare <button> gets Chrome's UA 1px 6px — 6px is off the 4px grid the kit declares.
+     inset:0 + place-items:center already centre the glyph, so zeroing it is free. */
+  border: 0; padding: 0; background: transparent; cursor: pointer;
   color: var(--muted); font: inherit;
   transition: background .12s, color .12s;
 }
@@ -149,10 +156,16 @@ body {
   width: 44px; height: 44px; border-radius: 999px;
   display: grid; place-items: center;
   font-size: 24px; line-height: 1;
-  border: 1px solid var(--line);
-  transition: border-color .12s, transform .12s, color .12s;
+  border: 1px solid var(--line-2);
+  /* a whisper of the accent so the ring is a target at rest, not only on hover */
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+  transition: border-color .12s, transform .12s, color .12s, background .12s;
 }
-.plus:hover .plus-glyph { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+.plus:hover .plus-glyph {
+  border-color: var(--accent); color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  transform: translateY(-1px);
+}
 .plus-label { font-size: 12px; }
 
 /* a running bay ------------------------------------------------------------ */
@@ -236,7 +249,14 @@ body {
   font-weight: 700;
   letter-spacing: .01em;
 }
-.bay.busy { border-color: color-mix(in srgb, var(--bay-c, var(--accent)) 45%, var(--line)); }
+/* A running bay should read as ALIVE across the whole grid, not just by its dot. A faint
+   aura in the bay's own hue lifts it off the black without tinting anything you read. */
+.bay.busy {
+  border-color: color-mix(in srgb, var(--bay-c, var(--accent)) 45%, var(--line));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--bay-c, var(--accent)) 14%, transparent),
+    0 8px 26px color-mix(in srgb, var(--bay-c, var(--accent)) 11%, transparent);
+}
 .dot.running {
   background: var(--bay-c, var(--green));
   box-shadow: 0 0 8px color-mix(in srgb, var(--bay-c, var(--green)) 60%, transparent);
