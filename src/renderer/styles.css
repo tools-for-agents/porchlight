@@ -19,7 +19,7 @@
   --red: #f87171;
   --cyan: #5eead4;
   --radius: 12px;
-  --shadow: 0 6px 24px rgba(0, 0, 0, .55);
+  --shadow: 0 8px 24px rgba(0, 0, 0, .55);
 }
 
 * { box-sizing: border-box; }
@@ -59,7 +59,7 @@ body {
   font: inherit; font-size: 12px; cursor: pointer;
   /* flex, not grid: place-items:center stacked the label and the running-dot in two ROWS,
      so the dot sat UNDER "Page 1" like a speck of dust instead of beside it. */
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   transition: color .12s, border-color .12s, background .12s;
 }
 .page-btn:hover { color: var(--txt); border-color: var(--line); background: var(--panel-2); }
@@ -70,7 +70,7 @@ body {
    drawn there. */
 .page-btn .live-dot {
   width: 5px; height: 5px; border-radius: 999px; background: var(--green);
-  box-shadow: 0 0 6px rgba(74, 222, 128, .8);
+  box-shadow: 0 0 8px rgba(74, 222, 128, .8);
   flex: none;
 }
 
@@ -84,7 +84,16 @@ body {
   transition: color .12s, border-color .12s;
 }
 .ghost:hover { color: var(--red); border-color: var(--red); }
-.ghost:disabled { opacity: 1; color: #4a5468; border-color: #1b2130; cursor: not-allowed; }
+/* Disabled = inert, but still hangar's palette. These two greys were #4a5468 / #1b2130 —
+   BLUE-greys, stranded here from agent-hq's palette, the one off-grid thing in the file. Derive
+   the dim from the tokens instead (opacity:1 kept on purpose: a flat mix reads cleaner on a
+   bordered button than a translucent one). */
+.ghost:disabled {
+  opacity: 1;
+  color: color-mix(in srgb, var(--muted) 52%, var(--bg));
+  border-color: color-mix(in srgb, var(--line-2) 60%, var(--bg));
+  cursor: not-allowed;
+}
 
 /* ── the grid ────────────────────────────────────────────────────────────── */
 #grid {
@@ -272,5 +281,8 @@ body {
 #grid.zoomed { grid-template-columns: 1fr; grid-template-rows: 1fr; }
 #grid.zoomed .bay { display: none; }
 #grid.zoomed .bay.zoom { display: block; }
-.act.zoom { font-size: 11px; }
+/* ⤢ rides the same 12px as ↗ ⟳ ✕ beside it. It was 11px — under the kit's minFont:12, the
+   one type-token violation in the repo, and it made the zoom control quietly the runt of the
+   four action glyphs. There is no gate for this here (hangar can't `serve`), so it survived by
+   never being looked at. .act already sets 12px; the override is gone. */
 .bay.zoom .act.zoom { color: var(--accent); }
