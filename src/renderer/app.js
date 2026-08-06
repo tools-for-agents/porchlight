@@ -196,6 +196,69 @@ function updateCount() {
   killAllBtn.disabled = n === 0;
 }
 
+// ── drag and drop ───────────────────────────────────────────────────────────
+// A real terminal turns a dropped file into its shell-quoted path at the cursor. xterm.js
+// is a RENDERER, not a terminal app: it has no concept of a file drop, so without this a
+// drag did nothing — and worse, a miss landed on the page, where Electron's default is to
+// NAVIGATE to file:///…, replacing the whole grid with the dropped file and taking every
+// running bay's tile with it. Both halves are handled here: the bay accepts, the window
+// refuses.
+
+// Quote only when the shell would otherwise mis-read it, the way Terminal.app does — a
+// bare path stays bare so what lands in the prompt is what you would have typed. Single
+// quotes take everything literally; the only character they cannot hold is a single quote,
+// which is closed, escaped and reopened ('\'' — the standard POSIX dance).
+function shellQuote(p) {
+  if (p === '') return "''";
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(p)) return p;
+  return `'${p.replace(/'/g, `'\\''`)}'`;
+}
+
+function attachDrop(el, id, term) {
+  const clear = () => el.classList.remove('drop-target');
+
+  // Without preventDefault on dragover the drop event NEVER fires — the single most
+  // common reason a hand-written drop handler looks dead.
+  el.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    el.classList.add('drop-target');
+  });
+  el.addEventListener('dragenter', (e) => { e.preventDefault(); el.classList.add('drop-target'); });
+  el.addEventListener('dragleave', (e) => { if (e.target === el) clear(); });
+
+  el.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    clear();
+    const dt = e.dataTransfer;
+    if (!dt) return;
+
+    const paths = [...(dt.files || [])]
+      .map((f) => window.hangar.pathForFile(f))
+      .filter(Boolean);
+
+    // Dropping a selection, a URL, or a path from another app hands over TEXT and no
+    // file. Falling through to "" here is what made dragging from a browser silently do
+    // nothing; the text is what the user meant, so it goes in verbatim.
+    let payload = paths.map(shellQuote).join(' ');
+    if (!payload) payload = (dt.getData('text/uri-list') || dt.getData('text/plain') || '').trim();
+    if (!payload) return;
+
+    // A trailing space so a second drop does not glue itself to the first, and so the
+    // path reads as a finished argument. Newlines would SUBMIT the prompt — a dropped
+    // multi-line selection must never press enter on somebody's agent, so they collapse.
+    window.hangar.write(id, payload.replace(/\r?\n/g, ' ') + ' ');
+    term.focus();
+  });
+}
+
+// The window itself refuses every drop that misses a bay. This is the guard, not a
+// nicety: one stray drop on the padding would otherwise navigate the app to a file URL.
+window.addEventListener('dragover', (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'none'; });
+window.addEventListener('drop', (e) => e.preventDefault());
+
 // ── terminals ───────────────────────────────────────────────────────────────
 async function mountTerm(id, host, slot, bay) {
   let rec = terms.get(id);
@@ -224,6 +287,7 @@ async function mountTerm(id, host, slot, bay) {
     rec = { term, fit, el, running: false, ro: null, opened: false };
     terms.set(id, rec);
     term.onData((d) => window.hangar.write(id, d));
+    attachDrop(el, id, term);
   }
 
   host.append(rec.el);

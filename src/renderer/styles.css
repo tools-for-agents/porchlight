@@ -215,6 +215,15 @@ body {
 /* the node xterm owns; the tile is re-created every render, this is not */
 .xterm-host { height: 100%; }
 
+/* Which bay will take the drop — with nine tiles the cursor is not enough to tell, and a
+   path typed into the wrong agent is worse than a drop that does nothing. Inset so it
+   cannot change the terminal's box and trigger a reflow/refit mid-drag. */
+.xterm-host.drop-target {
+  outline: 2px dashed currentColor;
+  outline-offset: -3px;
+  border-radius: 4px;
+}
+
 /* ── pages you can close ─────────────────────────────────────────────────── */
 /* The page button holds its own ✕. It only appears on hover/focus of the tab, and
    only when there is more than one page — a lone page has nothing to fall back to. */
