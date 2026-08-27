@@ -3,8 +3,12 @@
 <head>
   <meta charset="utf-8">
   <!-- No remote anything. Everything this window loads ships in the app. -->
+  <!-- script-src blob: is for the mic worklet ONLY — the packaged page lives inside
+       app.asar and Chromium cannot load a worklet module out of an asar, so mic.js
+       inlines the processor and addModule()s a Blob. A blob can only be MADE by code
+       already running here, so this does not widen where scripts come FROM. -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:;">
+        content="default-src 'none'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:;">
   <title>hangar</title>
   <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="styles.css">
