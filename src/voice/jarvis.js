@@ -210,7 +210,11 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
     toEngine({
       t: 'cfg',
       profile: profile?.v || null,
-      threshold: cfg.threshold ?? profile?.threshold ?? 0.45,
+      // Capped at 0.48 no matter what enrollment measured: the owner's own profile came
+      // out at 0.55 (three clean, consistent samples) and then REJECTED most of their
+      // real-world speech — same voice, different distance and mood scores 0.45-0.55.
+      // A too-strict gate reads as "mira ignores me", which is worse than a rare leak.
+      threshold: Math.min(cfg.threshold ?? profile?.threshold ?? 0.45, 0.48),
       voices: cfg.voices,
       sttLang: cfg.sttLang,
     });
@@ -229,8 +233,8 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
         break;
       case 'utt': onUtterance(msg); break;
       case 'reject':
-        dbg(`jarvis: voice rejected (cos ${msg.score})`);
-        event({ t: 'reject', score: msg.score });
+        dbg(`jarvis: voice rejected (cos ${msg.score} < ${msg.need})`);
+        event({ t: 'reject', score: msg.score, need: msg.need });
         break;
       case 'enrolled': onEnrolled(msg.v); break;
       case 'spoke': onSpoke(msg); break;
@@ -501,7 +505,7 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
       }
       sims.push(dot / (Math.sqrt(na) * Math.sqrt(nb) || 1));
     }
-    const threshold = Math.min(0.55, Math.max(0.35, Math.min(...sims) - 0.12));
+    const threshold = Math.min(0.48, Math.max(0.33, Math.min(...sims) - 0.12));
     profile = { v: enrollTaken, threshold, createdAt: new Date().toISOString() };
     writeJson(profileFile, profile);
     enrollTaken = [];

@@ -24,6 +24,7 @@
   let phase = 'off';
   let enrolled = false;
   let rejectedAt = 0;
+  let lastRejectToast = 0;
   let lastActivity = 0;
   let demoLevel = 0;     // stands in for the mic when she speaks (afplay's output is not ours to tap)
 
@@ -272,9 +273,20 @@
         paintChrome();
         break;
       case 'heard':
+        // Not-acted is still SHOWN: "mira ignores me" was really the wake word missing,
+        // and silence taught the user nothing.
         if (ev.acted) youSaid(ev.text);
+        else showToast(`heard: “${ev.text}” — no wake word, ignored`);
         break;
-      case 'reject': rejectedAt = performance.now(); break;
+      case 'reject':
+        rejectedAt = performance.now();
+        // The flare alone read as nothing at all. Say it — throttled, or a chatty room
+        // would be all toast.
+        if (performance.now() - (lastRejectToast || 0) > 8000) {
+          lastRejectToast = performance.now();
+          showToast(`a voice scored ${ev.score} — below your ${ev.need ?? 'voiceprint'} gate, ignored (re-enroll if this is you)`);
+        }
+        break;
       case 'say':
         miraSays(ev.text);
         (ev.bays || []).forEach((id) => window.hangarBayFlash?.(id));

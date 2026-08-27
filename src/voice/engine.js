@@ -217,6 +217,7 @@ let threshold = 0.45;
 let enrollArmed = false;
 let vadWasOn = false;
 let sttLang = 'tr';
+let lastOkAt = 0;          // last time the gate accepted the owner — conversation continuity
 let recognizer = null;     // built on first cfg, so a lang change can rebuild it
 const getRecognizer = () => (recognizer ||= makeRecognizer(sttLang));
 
@@ -246,7 +247,10 @@ function processSegment(samples) {
     const v = embed(extractor, samples);
     score = Math.max(...profile.map((p) => cosine(v, p)));
   }
-  const ok = score === null || score >= threshold;
+  // Mid-conversation the gate relaxes: the owner was accepted seconds ago, and the same
+  // voice drifting to 0.42 on a casual follow-up should not read as a stranger.
+  const eff = Date.now() - lastOkAt < 30_000 ? threshold - 0.08 : threshold;
+  const ok = score === null || score >= eff;
 
   // A bare "dur!" is the one utterance that must NEVER be dropped — and it is exactly
   // the one the pipeline used to drop: too short for the old 0.35s floor, and short
@@ -259,16 +263,18 @@ function processSegment(samples) {
     if (secs <= 1.4 && worthALook) {
       const text = transcribe(getRecognizer(), padShort(samples, secs));
       if (stopKind(text)) {
+        lastOkAt = Date.now();
         say({ t: 'utt', text, score: score === null ? null : +score.toFixed(3), ok: true, secs: +secs.toFixed(1) });
         return;
       }
     }
-    if (!ok) say({ t: 'reject', score: +score.toFixed(3), secs: +secs.toFixed(1) });
+    if (!ok) say({ t: 'reject', score: +score.toFixed(3), need: +eff.toFixed(2), secs: +secs.toFixed(1) });
     return;
   }
 
   const text = transcribe(getRecognizer(), padShort(samples, secs));
   if (!text) return;
+  if (score !== null) lastOkAt = Date.now();
   say({ t: 'utt', text, score: score === null ? null : +score.toFixed(3), ok, secs: +secs.toFixed(1) });
 }
 

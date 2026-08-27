@@ -57,7 +57,22 @@ let win = null;
 // fine. Silence from a flag that isn't wired is the same silence a dead pty makes, so the
 // notes handed me a confident wrong diagnosis for free. It exists now: quiet means quiet.
 const DEBUG = !!process.env.HANGAR_DEBUG;
-const dbg = (...a) => { if (DEBUG) console.log('[hangar]', ...a); };
+// dbg goes to the console only under HANGAR_DEBUG — but ALWAYS to a capped file in
+// userData. The app is launched from Finder, its stdout goes nowhere, and every voice
+// bug so far was diagnosed blind until a log existed. Diagnostics must never hurt the
+// app: any failure here is swallowed.
+let dbgStream = null;
+function dbg(...a) {
+  if (DEBUG) console.log('[hangar]', ...a);
+  try {
+    if (!dbgStream) {
+      const f = path.join(app.getPath('userData'), 'debug.log');
+      try { if (fs.existsSync(f) && fs.statSync(f).size > 2_000_000) fs.truncateSync(f, 0); } catch { /* fresh file */ }
+      dbgStream = fs.createWriteStream(f, { flags: 'a' });
+    }
+    dbgStream.write(`${new Date().toISOString()} ${a.map(String).join(' ')}\n`);
+  } catch { /* never */ }
+}
 
 const SENTINEL = '__HANGAR_PATH__';
 const afterSentinel = (stdout) => {
