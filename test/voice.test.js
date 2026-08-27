@@ -39,6 +39,21 @@ test('a sentence merely ABOUT jarvis, or without it, does not wake', () => {
   assert.equal(matchWake('servis katmanı bozuldu galiba'), null);
 });
 
+test('mira: her name wakes, in any of its whisper spellings, alongside jarvis', () => {
+  const WAKES = ['mira', 'jarvis'];   // the shipped default
+  assert.equal(matchWake('Mira, bay üç nasıl gidiyor?', WAKES).command, 'bay üç nasıl gidiyor?');
+  assert.equal(matchWake('mira testleri çalıştır', WAKES).command, 'testleri çalıştır');
+  assert.equal(matchWake("Mira'ya söylüyorum, dur", WAKES).command, 'söylüyorum, dur');
+  assert.ok(matchWake('Jarvis, durum ne?', WAKES), 'the old habit still answers');
+});
+
+test('mira: near-words with a different first letter can never summon her', () => {
+  const WAKES = ['mira', 'jarvis'];
+  assert.equal(matchWake('bira alalım mı bugün', WAKES), null);       // 1 edit away, wrong start
+  assert.equal(matchWake('mimar bey geldi az önce', WAKES), null);    // right start, 2 edits, short name allows 1
+  assert.equal(matchWake('bay üç mira kelimesini yazdı', WAKES), null); // about her, not to her
+});
+
 test('guessLang: Turkish by letters or stopwords, English otherwise', () => {
   assert.equal(guessLang('çalışıyor mu bilmiyorum'), 'tr');
   assert.equal(guessLang('tamam devam et'), 'tr');

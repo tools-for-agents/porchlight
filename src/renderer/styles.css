@@ -207,44 +207,74 @@ body {
 .term .xterm-viewport::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
 .term .xterm-viewport::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
-/* ── jarvis: the orb ──────────────────────────────────────────────────────── */
-/* One dot tells the whole story: grey asleep, green breathing while it listens, cyan
-   when it hears speech, amber pulsing while the brain thinks, and solid bright when it
-   talks back. The label repeats it in words for anyone not fluent in dot. */
+/* ── mira: the orb ────────────────────────────────────────────────────────── */
+/* The ring is a CANVAS drawn from the live microphone level — the one element in this
+   app that moves on its own, so everything it does must MEAN something: green breathing
+   is "listening", the cyan equalizer is "your words arriving", the amber comet is the
+   brain running, expanding rings are her voice, one red flare is a stranger's. The pill
+   only carries the word for people not yet fluent in ring. */
 .orb {
   display: inline-flex; align-items: center; gap: 8px;
-  height: 24px; padding: 0 8px;
+  height: 24px; padding: 0 8px 0 2px;
   border-radius: 999px; border: 1px solid var(--line);
   background: transparent; color: var(--muted);
   font: inherit; font-size: 12px; cursor: pointer;
   transition: color .12s, border-color .12s, background .12s;
 }
 .orb:hover { color: var(--txt); border-color: var(--line-2); background: var(--panel-2); }
-.orb-dot {
-  width: 8px; height: 8px; border-radius: 999px; flex: none;
-  background: var(--muted);
-  transition: background .2s, box-shadow .2s;
-}
-.orb[data-phase="boot"] .orb-dot { background: var(--muted); animation: orb-breathe 1s ease-in-out infinite; }
+#orb-c { width: 22px; height: 22px; flex: none; }
 .orb[data-phase="listening"] { color: var(--txt); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
-.orb[data-phase="listening"] .orb-dot {
-  background: var(--accent);
-  box-shadow: 0 0 8px rgba(74, 222, 128, .6);
-  animation: orb-breathe 2.6s ease-in-out infinite;
-}
-.orb[data-phase="hearing"] .orb-dot { background: var(--cyan); box-shadow: 0 0 10px rgba(94, 234, 212, .8); animation: none; }
-.orb[data-phase="thinking"] .orb-dot { background: var(--amber); box-shadow: 0 0 8px rgba(251, 191, 36, .6); animation: orb-breathe .8s ease-in-out infinite; }
-.orb[data-phase="speaking"] .orb-dot { background: var(--accent); box-shadow: 0 0 12px rgba(74, 222, 128, .9); animation: none; }
-.orb[data-phase="enroll"] .orb-dot { background: var(--cyan); animation: orb-breathe 1.4s ease-in-out infinite; }
-/* ears on, but no voiceprint yet: the amber ring is the "it will obey nobody" warning */
+.orb[data-phase="hearing"]   { color: var(--txt); border-color: color-mix(in srgb, var(--cyan) 45%, var(--line)); }
+.orb[data-phase="thinking"]  { color: var(--txt); border-color: color-mix(in srgb, var(--amber) 45%, var(--line)); }
+.orb[data-phase="speaking"]  { color: var(--txt); border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+.orb[data-phase="enroll"]    { color: var(--txt); border-color: color-mix(in srgb, var(--cyan) 45%, var(--line)); }
+/* ears on, but no voiceprint yet: amber = "she will obey nobody" */
 .orb.needs-enroll { border-color: var(--amber); }
-/* somebody ELSE spoke — one short red flare, then back to normal */
-.orb.rejected .orb-dot { background: var(--red); box-shadow: 0 0 10px rgba(248, 113, 113, .8); animation: none; }
-@keyframes orb-breathe { 50% { opacity: .35; } }
 
-/* ── what jarvis heard / said ─────────────────────────────────────────────── */
+/* ── the comm strip: the exchange, both ways ──────────────────────────────── */
+#comm {
+  position: fixed; left: 50%; bottom: 52px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px;
+  width: min(720px, 84vw);
+  padding: 12px 16px;
+  border-radius: var(--radius); border: 1px solid var(--line-2);
+  background: rgba(5, 8, 7, .88); backdrop-filter: blur(16px);
+  box-shadow: var(--shadow), 0 0 32px rgba(74, 222, 128, .06);
+  z-index: 10;
+}
+#comm[hidden] { display: none; }
+#comm-c { width: 44px; height: 44px; flex: none; }
+.comm-lines { min-width: 0; flex: 1; display: grid; gap: 4px; }
+.comm-line {
+  display: flex; gap: 8px; align-items: baseline; min-width: 0;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.comm-line .tag { flex: none; width: 36px; text-align: right; font-size: 11px; letter-spacing: .04em; }
+.comm-line.you  .tag { color: var(--muted); }
+.comm-line.mira .tag { color: var(--accent); text-shadow: 0 0 8px rgba(74, 222, 128, .5); }
+.comm-line .txt { color: var(--txt); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comm-line.mira .txt { color: #d9fbe7; }
+.comm-line.mira .txt.dim { color: var(--muted); }
+/* her caret, while the line is still arriving */
+.comm-line.mira .txt:not(:empty):not(.dim)::after {
+  content: "▍"; color: var(--accent); animation: caret 1s steps(1) infinite;
+}
+@keyframes caret { 50% { opacity: 0; } }
+
+/* an order just landed here — the tile answers in its own hue, then lets go */
+.bay.voice-hit { animation: voice-hit 2.4s ease-out; }
+@keyframes voice-hit {
+  0% {
+    border-color: var(--bay-c, var(--accent));
+    box-shadow: 0 0 0 1px var(--bay-c, var(--accent)),
+                0 0 42px color-mix(in srgb, var(--bay-c, var(--accent)) 55%, transparent);
+  }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* ── system notices (the conversation lives in the comm strip) ────────────── */
 #voice-toast {
-  position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%);
+  position: fixed; left: 50%; top: 56px; transform: translateX(-50%);
   max-width: min(680px, 80vw);
   padding: 8px 16px;
   border-radius: 999px; border: 1px solid var(--line-2);
@@ -252,7 +282,7 @@ body {
   color: var(--txt); font-size: 12px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   box-shadow: var(--shadow);
-  z-index: 10;
+  z-index: 11;
 }
 #voice-toast[hidden] { display: none; }
 
@@ -266,12 +296,18 @@ body {
 #enroll::backdrop { background: rgba(5, 8, 7, .7); backdrop-filter: blur(4px); }
 #enroll h2 { margin: 0 0 8px; font-size: 16px; }
 #enroll .enroll-why { margin: 0 0 16px; color: var(--muted); font-size: 12px; }
-#enroll ol { margin: 0 0 20px; padding-left: 20px; display: grid; gap: 8px; }
+#enroll ol { margin: 0 0 16px; padding-left: 20px; display: grid; gap: 8px; }
 #enroll .phrase { color: var(--muted); transition: color .12s; }
 #enroll .phrase.current { color: var(--txt); font-weight: 650; }
-#enroll .phrase.current::marker { color: var(--accent); }
+#enroll .phrase.current::marker { color: var(--cyan); }
 #enroll .phrase.done { color: var(--accent); }
 #enroll .phrase.done::after { content: " ✓"; }
+/* proof her ears are on: the live level, the same signal the orb draws */
+#enroll-meter {
+  display: block; width: 100%; height: 6px; margin: 0 0 16px;
+  border-radius: 999px; border: 1px solid var(--line);
+  background: var(--panel-2);
+}
 .enroll-acts { display: flex; gap: 8px; align-items: center; }
 #enroll .capture {
   height: 28px; padding: 0 12px;

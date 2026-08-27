@@ -39,7 +39,12 @@ function createJarvis({ userDataDir, bays, loadState, findClaude, loginEnv, send
 
   const saved = readJson(cfgFile) || {};
   const cfg = {
-    wake: 'jarvis',
+    // Her name is Mira — Omicron Ceti, "the Wonderful", the first star anyone watched
+    // breathe: it brightens and dims like the orb does. Chosen by measurement, not vibes:
+    // whisper transcribed it perfectly in every trial (Hüma came back "Yuma"), and no
+    // common Turkish sentence-starter is within edit range of it. "jarvis" stays as a
+    // second wake word for the habit that named this module.
+    wake: ['mira', 'jarvis'],
     model: 'haiku',        // the brain: fast beats brilliant for "how is bay 3 doing"
     threshold: null,       // null → the value enrollment measured, or the engine's default
     ...saved,
@@ -179,7 +184,8 @@ function createJarvis({ userDataDir, bays, loadState, findClaude, loginEnv, send
       return;
     }
     for (const a of reply.actions) act(a);
-    event({ t: 'say', text: reply.say, actions: reply.actions.length });
+    // the renderer lights up the tiles that just received an order, in their own hue
+    event({ t: 'say', text: reply.say, actions: reply.actions.length, bays: reply.actions.map((a) => a.bay) });
     history.push({ heard: command, said: reply.say });
     history = history.slice(-HISTORY_KEPT);
     followUpUntil = Date.now() + FOLLOW_UP_MS;

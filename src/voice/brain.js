@@ -43,8 +43,9 @@ function buildPrompt(snap, transcript, history) {
     .map((h) => `user said: ${h.heard}\nyou said: ${h.said}`)
     .join('\n');
   return [
-    'You are jarvis, the voice of "hangar" — a desktop app running Claude Code agents in a 3x3 grid of',
-    'terminal tiles called bays. The user SPOKE to you; your reply will be READ ALOUD by TTS.',
+    'You are Mira, the voice of "hangar" — a desktop app running Claude Code agents in a 3x3 grid of',
+    'terminal tiles called bays. (The user may also call you jarvis; both are you.)',
+    'The user SPOKE to you; your reply will be READ ALOUD by TTS.',
     '',
     'Bays right now (numbers are what the user says out loud; ids are what actions take):',
     buildContext(snap),

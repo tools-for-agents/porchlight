@@ -47,6 +47,9 @@ contextBridge.exposeInMainWorld('hangar', {
   // there) and the orb; every decision — whose voice, which bay, what to type — is made
   // in main. Raw audio goes DOWN this bridge; only status events ever come back up.
   voice: {
+    // test hook: HANGAR_VOICE_DEMO=hearing|thinking|speaking|enroll boots the voice UI in
+    // that state with a sample exchange, so the screenshot harness can photograph it.
+    demo: process.env.HANGAR_VOICE_DEMO || null,
     toggle: () => ipcRenderer.invoke('voice:toggle'),
     status: () => ipcRenderer.invoke('voice:status'),
     frame: (buf) => ipcRenderer.send('voice:frame', buf),

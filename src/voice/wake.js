@@ -36,29 +36,36 @@ function levenshtein(a, b) {
 }
 
 /**
- * Does this transcript start with the wake word?
+ * Does this transcript start with one of the wake words?
  * Returns { command } (the text after the wake word, '' if it was alone) or null.
- * Only the first TWO tokens are searched ("Hey Jarvis" still works): a call comes first;
- * "bay üçte jarvis kelimesi geçiyor" is a sentence ABOUT jarvis, not a call to it.
- * Distance 2 is allowed only when the token still STARTS like the wake word — "çarvis"
- * folds to "carvis" and passes, while "servis" (a real Turkish word, also 2 edits away)
- * does not get to command anybody's agents.
+ * Only the first TWO tokens are searched ("Hey Mira" still works): a call comes first;
+ * "bay üçte mira kelimesi geçiyor" is a sentence ABOUT mira, not a call to it.
+ *
+ * Fuzz is earned, not given: any fuzzy match REQUIRES the token to start like the wake
+ * word (whisper mangles the tail of a name, almost never its first phoneme — measured:
+ * "Hüma" came back "Yuma"/"Buma", which is why hüma-style names were rejected, and why
+ * a start-letter miss is a hard no). So "çarvis"→carvis passes for jarvis (the one j↔c
+ * alias), "bira" can never summon mira, and "servis" — a real Turkish word two edits
+ * from jarvis — commands nobody's agents. Short names get distance 1, long ones 2.
  */
 function matchWake(transcript, wake = 'jarvis') {
   const cleaned = fold(transcript).replace(/[^\p{L}\p{N}\s']/gu, ' ');
   const tokens = cleaned.split(/\s+/).filter(Boolean);
-  const target = fold(wake);
+  const targets = (Array.isArray(wake) ? wake : [wake]).map(fold);
   for (let i = 0; i < Math.min(2, tokens.length); i++) {
-    // "jarvis'e" / "jarvisim" — a suffixed call is still a call
+    // "mira'ya" / "miracım" — a suffixed call is still a call
     const tok = tokens[i].replace(/'.*$/, '');
-    const trimmed = tok.length > target.length + 2 ? tok.slice(0, target.length + 1) : tok;
-    const sameStart = trimmed[0] === target[0] || (target[0] === 'j' && trimmed[0] === 'c');
-    const maxDist = target.length >= 5 && sameStart ? 2 : 1;
-    if (levenshtein(trimmed, target) <= maxDist) {
-      // The command is the ORIGINAL text after this token — whisper's own casing and
-      // punctuation carry meaning for the brain ("Jarvis, dur." vs "jarvis durum").
-      const rest = originalAfterToken(transcript, i);
-      return { command: rest.trim() };
+    for (const target of targets) {
+      const trimmed = tok.length > target.length + 2 ? tok.slice(0, target.length + 1) : tok;
+      const sameStart = trimmed[0] === target[0] || (target[0] === 'j' && trimmed[0] === 'c');
+      if (!sameStart) continue;
+      const maxDist = target.length >= 5 ? 2 : 1;
+      if (levenshtein(trimmed, target) <= maxDist) {
+        // The command is the ORIGINAL text after this token — whisper's own casing and
+        // punctuation carry meaning for the brain ("Mira, dur." vs "mira durum").
+        const rest = originalAfterToken(transcript, i);
+        return { command: rest.trim() };
+      }
     }
   }
   return null;

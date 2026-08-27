@@ -23,9 +23,20 @@ let pageIndex = 0;
 let zoomed = null;      // bay id filling the grid, or null
 let focusedBay = null;  // last terminal the user was typing in — jarvis's "here"
 
-// jarvis's brain needs to know what "here" means: the page on screen and the bay whose
+// mira's brain needs to know what "here" means: the page on screen and the bay whose
 // terminal last held focus. Pushed, not polled — it changes on exactly these code paths.
 const sendView = () => window.hangar.voice?.view({ page: pageIndex, focused: focusedBay });
+
+// When mira types an order into a bay, that tile flares in its own hue — with nine
+// terminals on screen, "I sent it" means nothing unless you can SEE which one took it.
+window.hangarBayFlash = (id) => {
+  const el = terms.get(id)?.el.closest('.bay');
+  if (!el) return;
+  el.classList.remove('voice-hit');
+  void el.offsetWidth;               // restart the animation if the last flash is still fading
+  el.classList.add('voice-hit');
+  setTimeout(() => el.classList.remove('voice-hit'), 2400);
+};
 
 /** id -> { term, fit, ro, running } for bays that have ever been rendered */
 const terms = new Map();

@@ -11,12 +11,20 @@
   let ctx = null, stream = null, node = null;
   let acc = new Int16Array(CHUNK), accLen = 0;
   let readPos = 0;                 // fractional read cursor into the incoming stream, in source samples
+  let level = 0;                   // 0..1 smoothed RMS — the orb draws THIS, the real signal
 
   // Linear-interpolation resampler. The context's rate is whatever the hardware likes
   // (48k usually, 44.1k sometimes) — a fixed /3 decimation would quietly detune 44.1k
   // into chipmunk PCM and whisper would transcribe soup.
   let carry = new Float32Array(0);
   function feed(block, srcRate) {
+    // The visualizer's feed: fast attack, slow decay, so a syllable registers and the
+    // fall-off reads as motion rather than flicker.
+    let sum = 0;
+    for (let i = 0; i < block.length; i++) sum += block[i] * block[i];
+    const rms = Math.min(1, Math.sqrt(sum / block.length) * 6);
+    level = rms > level ? rms : level * 0.92;
+
     const ratio = srcRate / TARGET_SR;
     const joined = new Float32Array(carry.length + block.length);
     joined.set(carry, 0); joined.set(block, carry.length);
@@ -60,7 +68,8 @@
     try { ctx?.close(); } catch { /* half-built */ }
     ctx = null; stream = null; node = null;
     accLen = 0; carry = new Float32Array(0); readPos = 0;
+    level = 0;
   }
 
-  window.hangarMic = { start, stop, get live() { return !!ctx; } };
+  window.hangarMic = { start, stop, get live() { return !!ctx; }, get level() { return level; } };
 })();

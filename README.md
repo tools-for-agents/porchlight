@@ -73,7 +73,7 @@ npm run dist       # → dist/
 | page `+` | add another page of nine |
 | page `✕` | close a page (hover a page tab; it asks first if agents are running) |
 | `stop all` | kill every running agent |
-| orb / `⌘⇧J` | jarvis, the voice — see below |
+| orb / `⌘⇧J` | mira, the voice — see below |
 
 Click into a tile and type — it is a real terminal, so `shift+tab` cycles permission modes,
 `esc` interrupts, and `/` commands work.
@@ -84,14 +84,24 @@ whole window and a full-height terminal; the other eight keep running behind it.
 process keeps running and the tile replays its output when you come back. Quitting hangar
 stops every agent it started.
 
-## jarvis — talking to your agents
+## mira — talking to your agents
 
-The orb in the footer is a voice. Turn it on (click, or `⌘⇧J`), teach it your voice once
-— three sentences read aloud — and from then on:
+The orb in the footer is a voice. Her name is **Mira** — Omicron Ceti, *Stella Mira*, "the
+wonderful": the first star anyone watched breathe, brightening and dimming the way the orb
+does. (The name survived a bake-off, not a brainstorm: whisper transcribed every candidate
+twenty ways and Mira came back perfect every time, with no common Turkish word within edit
+distance of her — "Hüma" came back *Yuma*.) She also answers to "jarvis", for the habit.
 
-> **“Jarvis, bay üç nasıl gidiyor?”** — it reads that bay's terminal and tells you, out loud.
-> **“Jarvis, run the tests in the hangar project.”** — it types the prompt into that bay's agent.
-> **“Jarvis, dur.”** — it interrupts the agent, the way `esc` would.
+Turn her on (click, or `⌘⇧J`), teach her your voice once — three sentences read aloud —
+and from then on:
+
+> **“Mira, bay üç nasıl gidiyor?”** — she reads that bay's terminal and tells you, out loud.
+> **“Mira, run the tests in the hangar project.”** — she types the prompt into that bay's agent, and the tile flares in its own hue so you see the order land.
+> **“Mira, dur.”** — she interrupts the agent, the way `esc` would.
+
+While you talk, the orb draws the actual microphone level — a circular equalizer of your
+words arriving — and the comm strip above the footer shows the exchange both ways, her
+half typing itself out as she speaks it.
 
 The listening runs on this Mac and never leaves it: [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)
 does the hearing (Silero VAD) and the reading (Whisper small — Turkish and English both).
@@ -117,9 +127,9 @@ npm run voice-models   # one-time, ~840MB down / ~570MB kept (VAD + whisper + vo
 ```
 
 The models live in `~/Library/Application Support/hangar/voice-models`; the voiceprint in
-`voice-profile.json` next to your state file — delete it and jarvis is deaf to everyone
-again. `voice.json` alongside takes `{"wake": "...", "model": "haiku"}` if you want a
-different wake word or a different brain.
+`voice-profile.json` next to your state file — delete it and mira is deaf to everyone
+again. `voice.json` alongside takes `{"wake": ["mira", "jarvis"], "model": "haiku"}` if
+you want different wake words or a different brain.
 
 ## Why it looks like this
 

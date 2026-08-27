@@ -24,9 +24,11 @@ licence to add anything else — the rest of the kit's doctrine still applies.
 accounts, keys or network of its own — it spawns the local `claude`, which authenticates itself. The only
 thing it persists is folder paths.
 
-## jarvis — the voice (src/voice/)
+## mira — the voice (src/voice/)
 
-The orb in the footer. Pipeline: renderer mic (`mic.js` + worklet, 16k int16 frames over IPC) →
+The orb in the footer. Her NAME is Mira (chosen by whisper bake-off — see README; "jarvis" kept as a
+second wake word and as the module's internal name — do not rename the files). Pipeline: renderer mic
+(`mic.js` + worklet, 16k int16 frames over IPC) →
 `engine.js`, a **plain-node sidecar** spawned with `ELECTRON_RUN_AS_NODE=1` and
 `DYLD_LIBRARY_PATH` pointing at `sherpa-onnx-darwin-arm64` (VAD → speaker-verification gate →
 whisper STT, plus piper TTS) → `jarvis.js` in main (wake word, policy, actions) → `brain.js`
