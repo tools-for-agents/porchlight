@@ -98,6 +98,10 @@ and from then on:
 > **“Mira, bay üç nasıl gidiyor?”** — she reads that bay's terminal and tells you, out loud.
 > **“Mira, run the tests in the hangar project.”** — she types the prompt into that bay's agent, and the tile flares in its own hue so you see the order land.
 > **“Mira, dur.”** — she interrupts the agent, the way `esc` would.
+> **“Mira, yeni bir proje başlat, adı X olsun, şunu yaptır…”** — she creates the folder (under
+> wherever your projects already live), opens a session in it, and dictates the first task to
+> the new agent once it boots. She can also close, kill or restart any session — she runs the
+> fleet, not just one tile.
 
 While you talk, the orb draws the actual microphone level — a circular equalizer of your
 words arriving — and the comm strip above the footer shows the exchange both ways, her

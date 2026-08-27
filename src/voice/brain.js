@@ -57,8 +57,10 @@ function buildContext(snap) {
         id === snap.focusedBayId ? 'FOCUSED — this is "here"/"bura"/"şu"' : '',
       ].filter(Boolean).join(', ');
       lines.push(`  bay ${slot + 1} [id=${id}] "${bay.title}" (${bay.path}) — ${marks}`);
-      if (live && here) {
-        const t = tail(live.buf, 1200);
+      if (live) {
+        // The orchestrator sees the WHOLE fleet: on-screen bays in detail, the rest
+        // abridged — enough to answer "başka sayfadaki oyun ne durumda" without a page turn.
+        const t = tail(live.buf, here ? 1200 : 600);
         if (t) lines.push('    last output:\n' + t.split('\n').map((l) => '      ' + l).join('\n'));
       }
     });
@@ -67,7 +69,7 @@ function buildContext(snap) {
   return lines.join('\n');
 }
 
-function buildPrompt(snap, transcript, history, mem = []) {
+function buildPrompt(snap, transcript, history, mem = [], projectsDir = '') {
   const past = (history || [])
     .map((h) => `user said: ${h.heard}\nyou said: ${h.said}`)
     .join('\n');
@@ -98,7 +100,23 @@ function buildPrompt(snap, transcript, history, mem = []) {
     'Never rewrite MEMORY.md wholesale — append or edit your one line.',
     '',
     'Your FINAL message must be ONLY this JSON object — no markdown fences, no prose around it:',
-    '{"say": "<spoken reply>", "lang": "tr"|"en", "actions": [{"type":"send","bay":"<id>","text":"<prompt for that agent>"} | {"type":"esc","bay":"<id>"}]}',
+    '{"say": "<spoken reply>", "lang": "tr"|"en", "actions": [',
+    '  {"type":"send","bay":"<id>","text":"<prompt for that agent>"}   — type into a running session',
+    '  | {"type":"esc","bay":"<id>"}                                   — interrupt it (Esc)',
+    '  | {"type":"start","path":"<folder or name>","title":"<tile name>","create":true|false,"text":"<optional first task>"}',
+    '  | {"type":"kill","bay":"<id>"}                                  — stop the agent, keep the tile',
+    '  | {"type":"restart","bay":"<id>"}                               — fresh agent, same folder',
+    '  | {"type":"close","bay":"<id>"}                                 — stop AND empty the tile',
+    ']}',
+    '',
+    'You are the fleet\'s orchestrator, not just a reporter — you may open sessions, close them, and',
+    'create project folders:',
+    `- "start": a bare name resolves under ${projectsDir || 'the user\'s projects dir'}; "create":true`,
+    '  mkdirs it first (a brand-new project). Give "text" to hand the new agent its first task in the',
+    '  same breath — it is typed in once the session is up. An existing project\'s path can come from',
+    '  memory, the bays above, or a quick Glob of the projects dir.',
+    '- "close" or "kill" on a bay that is mid-work needs spoken confirmation first, same as anything',
+    '  destructive. Closing an idle or finished session is fine to just do.',
     '',
     'Rules:',
     '- "say" is SPEECH: short (1-3 sentences), natural, no lists, no file paths, no code. Match the language the user spoke.',
@@ -140,7 +158,8 @@ function parseReply(text) {
   const actions = Array.isArray(obj.actions)
     ? obj.actions.filter((a) => a && (
         (a.type === 'send' && typeof a.bay === 'string' && typeof a.text === 'string' && a.text.trim()) ||
-        (a.type === 'esc' && typeof a.bay === 'string')))
+        (['esc', 'kill', 'restart', 'close'].includes(a.type) && typeof a.bay === 'string') ||
+        (a.type === 'start' && typeof a.path === 'string' && a.path.trim())))
     : [];
   return { say: obj.say.trim(), lang: obj.lang === 'en' ? 'en' : obj.lang === 'tr' ? 'tr' : null, actions };
 }
@@ -156,10 +175,10 @@ function parseReply(text) {
  * the wait by speaking an acknowledgement first.
  * @returns {Promise<{say,lang,actions}|null>}
  */
-function ask({ bin, env, model, effort, snap, transcript, history, timeoutMs = 240_000, dbg = () => {} }) {
+function ask({ bin, env, model, effort, snap, transcript, history, projectsDir = '', timeoutMs = 240_000, dbg = () => {} }) {
   return new Promise((resolve) => {
     const mem = gatherMemory(snap);
-    const prompt = buildPrompt(snap, transcript, history, mem);
+    const prompt = buildPrompt(snap, transcript, history, mem, projectsDir);
     const args = ['-p', '--model', model, '--dangerously-skip-permissions'];
     if (effort) args.push('--effort', effort);
     dbg(`brain: asking ${model}${effort ? `/${effort}` : ''} (${prompt.length} chars, ${mem.length} memory indexes)`);

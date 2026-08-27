@@ -457,6 +457,32 @@ window.hangar.onExit(({ id, code, reason }) => {
   renderAll();
 });
 
+// mira reshaped the fleet — a session started, closed, or needs a restart. Reload state
+// from main (which just wrote it) and let the NORMAL render flow do the rest: mountTerm
+// auto-starts any filled bay that is not running, exactly as if a human had clicked +.
+window.hangar.voice?.onSync(async ({ page, restart } = {}) => {
+  const loaded = await window.hangar.loadState();
+  if (loaded?.pages?.length) { state = loaded; readOnly = loaded.ok === false; }
+  if (typeof page === 'number') pageIndex = Math.max(0, Math.min(page, state.pages.length - 1));
+  // a closed bay's terminal must not live on in the terms map
+  const valid = new Set();
+  state.pages.forEach((p, i) => p.bays.forEach((b, s) => { if (b) valid.add(`${p.id}s${s}`); }));
+  for (const [id, rec] of [...terms]) {
+    if (valid.has(id)) continue;
+    rec.ro?.disconnect();
+    rec.term.dispose();
+    terms.delete(id);
+    if (focusedBay === id) focusedBay = null;
+  }
+  renderAll();
+  for (const id of restart || []) {
+    const m = /^(.+)s(\d)$/.exec(id);
+    const pi = m ? state.pages.findIndex((p) => p.id === m[1]) : -1;
+    const bay = pi !== -1 ? state.pages[pi].bays[Number(m[2])] : null;
+    if (bay && terms.get(id)) startBay(id, Number(m[2]), bay);
+  }
+});
+
 // esc: xterm gets the keystroke first when a terminal is focused (claude needs esc to
 // interrupt), so this only fires when focus is on the chrome. The ⤢ button is the way
 // out from inside a terminal.

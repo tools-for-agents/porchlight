@@ -38,6 +38,15 @@ inline; it Reads/Greps the memory files behind them and may Write memory back on
 typed into a bay's pty, reply spoken via `afplay`. The wait is masked by a spoken ack, and a bare
 "dur" bypasses the brain entirely (instant Esc).
 
+She is the fleet's ORCHESTRATOR: brain actions are send/esc/start/kill/restart/close. `start`
+mkdirs (home-dir-guarded — never outside `$HOME`), writes the bay into state.json in main, and sends
+`voice:sync` — the renderer reloads state and its NORMAL mountTerm flow starts the agent, exactly as
+if a human clicked +; there is deliberately no second way to spawn a session. A `start` may carry
+`text`: the first task, delivered once the new pty has spoken and settled (~6s). New-project parents
+are INFERRED (most common parent among existing bays; `voice.json` `projectsDir` overrides). E2E
+provable without a mic: `HANGAR_VOICE_DEMO=start HANGAR_VOICE_DEMO_START=<path>` drives the real
+action path and the screenshot shows the session mira opened.
+
 Rules that are POLICY, not accident: the engine only ever answers "who spoke and what did they
 say" — whether to obey lives in `jarvis.js`; an un-enrolled jarvis obeys **nobody**; the
 speaker gate is also the echo gate (jarvis's own piper voice scores a stranger). Models live in

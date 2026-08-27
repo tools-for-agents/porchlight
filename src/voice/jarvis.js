@@ -17,6 +17,41 @@ const fs = require('node:fs');
 const os = require('node:os');
 const { matchWake, guessLang } = require('./wake.js');
 const brain = require('./brain.js');
+const { BAYS_PER_PAGE } = require('../state.js');
+
+// ── pure pieces of the orchestrator, out here so node --test can hold them ───
+/** 'pg_abc123s4' → { pageId: 'pg_abc123', slot: 4 } — the renderer's id scheme, parsed back. */
+function parseBayId(id) {
+  const m = /^(.+)s(\d)$/.exec(String(id || ''));
+  return m ? { pageId: m[1], slot: Number(m[2]) } : null;
+}
+
+/** Where does a new session go? First empty slot on the page being looked at, then any
+ *  page's, and only then a fresh page — the same choice a human's eye would make. */
+function chooseSlot(pages, prefPi) {
+  const order = [prefPi, ...pages.map((_, i) => i).filter((i) => i !== prefPi)];
+  for (const pi of order) {
+    const slot = pages[pi]?.bays?.findIndex((b) => !b);
+    if (slot !== undefined && slot !== -1) return { pi, slot, newPage: false };
+  }
+  return { pi: pages.length, slot: 0, newPage: true };
+}
+
+/** "yeni proje aç" needs a parent dir. Don't guess a convention — read the user's own:
+ *  the most common parent among the folders their bays already point at. */
+function inferProjectsDir(pages, fallback) {
+  const counts = new Map();
+  for (const p of pages || []) {
+    for (const b of p.bays || []) {
+      if (!b?.path) continue;
+      const parent = path.dirname(b.path);
+      counts.set(parent, (counts.get(parent) || 0) + 1);
+    }
+  }
+  let best = null;
+  for (const [dir, n] of counts) if (best === null || n > counts.get(best)) best = dir;
+  return best || fallback;
+}
 
 const FOLLOW_UP_MS = 25_000;   // after jarvis speaks, you may answer without the wake word
 const HISTORY_KEPT = 4;
@@ -33,7 +68,7 @@ const modelsReady = () => fs.existsSync(path.join(modelsDir(), 'whisper', 'small
 // unpacks both (asarUnpack), at the same relative path under app.asar.unpacked.
 const unpacked = (p) => p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
 
-function createJarvis({ userDataDir, bays, loadState, findClaude, loginEnv, send, dbg }) {
+function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findClaude, loginEnv, send, dbg }) {
   const cfgFile = path.join(userDataDir, 'voice.json');
   const profileFile = path.join(userDataDir, 'voice-profile.json');
 
@@ -202,7 +237,7 @@ function createJarvis({ userDataDir, bays, loadState, findClaude, loginEnv, send
     }
     for (const a of reply.actions) act(a);
     // the renderer lights up the tiles that just received an order, in their own hue
-    event({ t: 'say', text: reply.say, actions: reply.actions.length, bays: reply.actions.map((a) => a.bay) });
+    event({ t: 'say', text: reply.say, actions: reply.actions.length, bays: reply.actions.map((a) => a.bay).filter(Boolean) });
     history.push({ heard: command, said: reply.say });
     history = history.slice(-HISTORY_KEPT);
     followUpUntil = Date.now() + FOLLOW_UP_MS;
@@ -244,14 +279,31 @@ function createJarvis({ userDataDir, bays, loadState, findClaude, loginEnv, send
     try {
       return await brain.ask({
         bin, env, model: cfg.model, effort: cfg.effort, snap,
-        transcript: command, history, timeoutMs: cfg.brainTimeout, dbg,
+        transcript: command, history, timeoutMs: cfg.brainTimeout,
+        projectsDir: projectsDir(), dbg,
       });
     } finally {
       busyThinking = false;
     }
   }
 
+  // ── the orchestrator's hands ───────────────────────────────────────────────
+  // send/esc talk to a session; start/kill/close/restart manage the fleet itself: they
+  // mutate state.json here in main and tell the renderer to re-sync — its normal render
+  // flow then mounts the tile and auto-starts the agent, exactly as if a human had
+  // clicked +. Nothing here spawns a process directly; the one way to run a bay stays
+  // the one way (main's startBay, CLAUDE_ARGS and all).
+  const newPageId = () => `pg_${Math.random().toString(36).slice(2, 10)}`;
+  const projectsDir = () =>
+    cfg.projectsDir || inferProjectsDir(loadState().pages, path.join(os.homedir(), 'Projects'));
+
   function act(a) {
+    switch (a.type) {
+      case 'start': return actStart(a);
+      case 'kill': return killBay(a.bay);
+      case 'close': return actClose(a.bay);
+      case 'restart': return actRestart(a.bay);
+    }
     const bay = bays.get(a.bay);
     if (!bay || bay.exited) { dbg(`jarvis: action for dead bay ${a.bay} dropped`); return; }
     if (a.type === 'esc') { bay.proc.write('\x1b'); return; }
@@ -261,6 +313,68 @@ function createJarvis({ userDataDir, bays, loadState, findClaude, loginEnv, send
       bay.proc.write(a.text.replace(/\s*\n\s*/g, ' ').trim());
       setTimeout(() => { try { if (!bay.exited) bay.proc.write('\r'); } catch { /* raced */ } }, 300);
     }
+  }
+
+  function actStart(a) {
+    try {
+      let p = String(a.path || '').trim();
+      if (!p) return dbg('jarvis: start with no path dropped');
+      if (!path.isAbsolute(p)) p = path.join(projectsDir(), p);
+      p = path.resolve(p);
+      // A misheard word must not mkdir outside the user's own house.
+      if (!(p + path.sep).startsWith(os.homedir() + path.sep)) {
+        return dbg(`jarvis: start outside home refused — ${p}`);
+      }
+      if (a.create) fs.mkdirSync(p, { recursive: true });
+      if (!fs.existsSync(p)) return dbg(`jarvis: start for missing folder dropped — ${p}`);
+
+      const state = loadState();
+      const spot = chooseSlot(state.pages, view.page);
+      if (spot.newPage) state.pages.push({ id: newPageId(), bays: Array(BAYS_PER_PAGE).fill(null) });
+      const page = state.pages[spot.pi];
+      page.bays[spot.slot] = { path: p, title: a.title || path.basename(p) };
+      saveState(state);
+      const id = `${page.id}s${spot.slot}`;
+      dbg(`jarvis: starting session ${id} in ${p}`);
+      send('voice:sync', { page: spot.pi });   // the renderer mounts it and the agent starts
+      if (a.text) deliverWhenReady(id, a.text);
+    } catch (e) {
+      dbg(`jarvis: start failed — ${e.message}`);
+    }
+  }
+
+  // A freshly started claude needs a few seconds before a paste will stick. Wait for the
+  // pty's first output, then a grace beat, then hand the new agent its first order.
+  function deliverWhenReady(id, text, tries = 0) {
+    const bay = bays.get(id);
+    if (bay && !bay.exited && bay.spoke && Date.now() - bay.startedAt > 6000) {
+      bay.proc.write(text.replace(/\s*\n\s*/g, ' ').trim());
+      setTimeout(() => { try { if (!bay.exited) bay.proc.write('\r'); } catch { /* raced */ } }, 400);
+      return;
+    }
+    if (tries > 60) return dbg(`jarvis: gave up delivering the first order to ${id}`);
+    setTimeout(() => deliverWhenReady(id, text, tries + 1), 1000);
+  }
+
+  function actClose(bayId) {
+    const at = parseBayId(bayId);
+    if (!at) return;
+    killBay(bayId);
+    const state = loadState();
+    const pi = state.pages.findIndex((p) => p.id === at.pageId);
+    if (pi === -1) return;
+    state.pages[pi].bays[at.slot] = null;
+    saveState(state);
+    send('voice:sync', {});
+  }
+
+  function actRestart(bayId) {
+    const at = parseBayId(bayId);
+    if (!at) return;
+    const state = loadState();
+    const pi = state.pages.findIndex((p) => p.id === at.pageId);
+    if (pi === -1 || !state.pages[pi].bays[at.slot]) return;
+    send('voice:sync', { page: pi, restart: [bayId] });
   }
 
   // ── speaking ───────────────────────────────────────────────────────────────
@@ -337,6 +451,7 @@ function createJarvis({ userDataDir, bays, loadState, findClaude, loginEnv, send
     ptt() { if (enabled) { pttArmed = true; event({ t: 'ptt' }); } },
     setView(v) { view = { page: v.page | 0, focused: v.focused || null }; },
     enrollStart, enrollCapture, enrollCancel,
+    act,   // exposed for main's HANGAR_VOICE_DEMO test hook — same code path the brain drives
     shutdown() { try { engine?.kill(); } catch { /* going down anyway */ } engine = null; },
   };
 }
@@ -347,4 +462,4 @@ function writeJson(f, obj) {
   catch (e) { console.error('jarvis: could not save', f, e.message); }
 }
 
-module.exports = { createJarvis, modelsReady };
+module.exports = { createJarvis, modelsReady, parseBayId, chooseSlot, inferProjectsDir };

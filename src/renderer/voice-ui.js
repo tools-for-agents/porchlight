@@ -306,6 +306,17 @@
   function demo(mode) {
     demoMode = mode;
     enrolled = true;
+    // 'start': drive a real fleet action through main's armed test hook — the grid must
+    // grow a live session, exactly as if the brain had ordered it.
+    if (mode === 'start' && window.hangar.voice.demoStart) {
+      phase = 'listening';
+      youSaid('Mira, yeni bir proje başlat.');
+      miraSays('Açıyorum efendim — yeni session hazır.');
+      lastActivity = Infinity;
+      window.hangar.voice.testAct({ actions: [{ type: 'start', path: window.hangar.voice.demoStart, create: true, text: 'Reply with exactly: MIRA WAS HERE' }] });
+      paintChrome();
+      return;
+    }
     phase = mode === 'enroll' ? 'enroll' : mode;
     if (mode === 'enroll') { dlg.showModal(); steps[0].classList.add('done'); steps[0].classList.remove('current'); steps[1].classList.add('current'); }
     else {

@@ -371,11 +371,22 @@ const getJarvis = () => (jarvis ??= createJarvis({
   userDataDir: app.getPath('userData'),
   bays,
   loadState,
+  saveState,
+  killBay,
   findClaude,
   loginEnv,
   send,
   dbg,
 }));
+
+// Test hook, armed only under HANGAR_VOICE_DEMO: feeds an actions array straight into
+// jarvis's act() — the exact code path the brain drives — so the screenshot rig can
+// prove that a voice-started session really appears in the grid, without a microphone.
+if (process.env.HANGAR_VOICE_DEMO) {
+  ipcMain.on('voice:test-act', (_e, { actions }) => {
+    for (const a of actions || []) getJarvis().act(a);
+  });
+}
 
 async function voiceToggle() {
   const j = getJarvis();

@@ -59,5 +59,10 @@ contextBridge.exposeInMainWorld('hangar', {
     enrollCapture: () => ipcRenderer.send('voice:enroll-capture'),
     enrollCancel: () => ipcRenderer.send('voice:enroll-cancel'),
     onEvent: (fn) => ipcRenderer.on('voice:event', (_e, p) => fn(p)),
+    // mira changed the fleet (started/closed a session) — reload state and re-render
+    onSync: (fn) => ipcRenderer.on('voice:sync', (_e, p) => fn(p)),
+    // test hook, dead unless main armed it (HANGAR_VOICE_DEMO)
+    testAct: (p) => ipcRenderer.send('voice:test-act', p),
+    demoStart: process.env.HANGAR_VOICE_DEMO_START || null,
   },
 });
