@@ -24,6 +24,25 @@ licence to add anything else — the rest of the kit's doctrine still applies.
 accounts, keys or network of its own — it spawns the local `claude`, which authenticates itself. The only
 thing it persists is folder paths.
 
+## jarvis — the voice (src/voice/)
+
+The orb in the footer. Pipeline: renderer mic (`mic.js` + worklet, 16k int16 frames over IPC) →
+`engine.js`, a **plain-node sidecar** spawned with `ELECTRON_RUN_AS_NODE=1` and
+`DYLD_LIBRARY_PATH` pointing at `sherpa-onnx-darwin-arm64` (VAD → speaker-verification gate →
+whisper STT, plus piper TTS) → `jarvis.js` in main (wake word, policy, actions) → `brain.js`
+(`claude -p --model haiku`, fed every bay's ANSI-stripped tail) → text typed into a bay's pty,
+reply spoken via `afplay`.
+
+Rules that are POLICY, not accident: the engine only ever answers "who spoke and what did they
+say" — whether to obey lives in `jarvis.js`; an un-enrolled jarvis obeys **nobody**; the
+speaker gate is also the echo gate (jarvis's own piper voice scores a stranger). Models live in
+`~/Library/Application Support/hangar/voice-models` (fixed on purpose — a `--user-data-dir` test
+run must not want its own 570MB); `npm run voice-models` fetches them. The pure parts (wake
+fuzzy-match, ANSI strip, brain parse/context) are under `node --test` in `test/voice.test.js`;
+the whole audio pipeline is testable without a microphone via engine's CLI
+(`engine.js --stt/--embed/--tts` on `say`-generated wavs — see the serve-mode protocol at the
+top of `engine.js`).
+
 ## The three things that cost real time (all commented in-source)
 
 **1. A GUI app does not have your PATH.** Launched from Finder it inherits `/usr/bin:/bin:/usr/sbin:/sbin`,

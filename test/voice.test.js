@@ -1,0 +1,120 @@
+'use strict';
+
+// jarvis's pure parts, pinned down: the wake word as whisper actually mangles it, the
+// ANSI stripper that turns a TUI recording into text, and the brain-reply parser that
+// must survive a model wrapping its JSON in prose or fences. No Electron, no models —
+// the impure edges (mic, sherpa, claude -p) are covered by engine.js's CLI selftest.
+
+const { test } = require('node:test');
+const assert = require('node:assert');
+
+const { matchWake, guessLang } = require('../src/voice/wake.js');
+const { stripAnsi, tail } = require('../src/voice/ansi.js');
+const { parseReply, buildContext } = require('../src/voice/brain.js');
+
+// ── wake ─────────────────────────────────────────────────────────────────────
+test('the wake word survives whisper: jarvis, Jarvis!, carvis, Çarvis, jarvıs all wake', () => {
+  for (const heard of [
+    'jarvis bay üç nasıl gidiyor',
+    'Jarvis, how is bay three?',
+    'Carvis bay üç nasıl',
+    'Çarvis, durum ne?',
+    'jarvıs testleri çalıştır',
+  ]) {
+    assert.ok(matchWake(heard), `"${heard}" should wake`);
+  }
+});
+
+test('the command is what comes AFTER the wake word, original casing kept', () => {
+  assert.equal(matchWake('Jarvis, bay üç nasıl gidiyor?').command, 'bay üç nasıl gidiyor?');
+  assert.equal(matchWake("Jarvis'e göre durum ne").command, 'göre durum ne');
+  assert.equal(matchWake('Jarvis.').command, '');
+});
+
+test('a sentence merely ABOUT jarvis, or without it, does not wake', () => {
+  assert.equal(matchWake('bay üçte jarvis kelimesi geçiyor mu bilmiyorum'), null);
+  assert.equal(matchWake('merhaba dünya nasılsın bugün'), null);
+  assert.equal(matchWake(''), null);
+  // "servis" is a real Turkish word one edit from carvis — it must NOT wake
+  assert.equal(matchWake('servis katmanı bozuldu galiba'), null);
+});
+
+test('guessLang: Turkish by letters or stopwords, English otherwise', () => {
+  assert.equal(guessLang('çalışıyor mu bilmiyorum'), 'tr');
+  assert.equal(guessLang('tamam devam et'), 'tr');
+  assert.equal(guessLang('run the tests and report back'), 'en');
+});
+
+// ── ansi ─────────────────────────────────────────────────────────────────────
+test('stripAnsi: colours, cursor moves, OSC titles and \\r all vanish; words stay', () => {
+  const tui = '\x1b]0;claude\x07\x1b[2J\x1b[1;32m✓ tests passed\x1b[0m\r\n\x1b[?25lrunning build\x1b[?25h';
+  const out = stripAnsi(tui);
+  assert.ok(out.includes('✓ tests passed'));
+  assert.ok(out.includes('running build'));
+  assert.ok(!/[\x00-\x09\x0b-\x1f]/.test(out), 'no control chars survive');
+  assert.ok(!out.includes('claude'), 'the OSC title was chrome, not content');
+});
+
+test('tail: last n chars only, whole lines, stripped', () => {
+  const buf = 'x'.repeat(5000) + '\nline A\n\x1b[31mline B\x1b[0m\nline C';
+  const t = tail(buf, 30);
+  assert.ok(t.endsWith('line C'));
+  assert.ok(!t.includes('\x1b'));
+  assert.ok(!t.startsWith('x') || t.indexOf('\n') === -1 || t.split('\n')[0].length < 30);
+});
+
+// ── brain reply parsing ──────────────────────────────────────────────────────
+test('a clean reply parses; bad actions are dropped, not fatal', () => {
+  const r = parseReply(JSON.stringify({
+    say: 'Bay üç testleri koşuyor.',
+    lang: 'tr',
+    actions: [
+      { type: 'send', bay: 'pg_1s2', text: 'run the tests' },
+      { type: 'send', bay: 'pg_1s2' },                        // no text → dropped
+      { type: 'launch-missiles', bay: 'pg_1s2' },             // unknown type → dropped
+      { type: 'esc', bay: 'pg_1s0' },
+    ],
+  }));
+  assert.equal(r.say, 'Bay üç testleri koşuyor.');
+  assert.equal(r.lang, 'tr');
+  assert.equal(r.actions.length, 2);
+  assert.equal(r.actions[0].type, 'send');
+  assert.equal(r.actions[1].type, 'esc');
+});
+
+test('models wrap JSON in fences and prose; the parser digs it out', () => {
+  const fenced = 'Sure! Here is the response:\n```json\n{"say":"All good.","actions":[]}\n```\nHope that helps!';
+  assert.equal(parseReply(fenced).say, 'All good.');
+  const braces = 'Note: {"say":"Done — I sent {\\"quoted\\"} text.","actions":[]} trailing words';
+  assert.equal(parseReply(braces).say, 'Done — I sent {"quoted"} text.');
+});
+
+test('garbage, empty say, or no JSON at all → null, never a throw', () => {
+  assert.equal(parseReply('I cannot answer that.'), null);
+  assert.equal(parseReply('{"say":""}'), null);
+  assert.equal(parseReply('{"broken": '), null);
+  assert.equal(parseReply(''), null);
+});
+
+// ── brain context ────────────────────────────────────────────────────────────
+test('buildContext: ids, spoken numbers, RUNNING/FOCUSED marks, tails only on-screen', () => {
+  const snap = {
+    pageIndex: 0,
+    focusedBayId: 'pg_a s1'.replace(' ', ''),
+    pages: [
+      { id: 'pg_a', bays: [{ title: 'hangar', path: '/x/hangar' }, { title: 'iris', path: '/x/iris' }, null, null, null, null, null, null, null] },
+      { id: 'pg_b', bays: [{ title: 'scout', path: '/x/scout' }, null, null, null, null, null, null, null, null] },
+    ],
+    running: {
+      pg_as0: { buf: '\x1b[32mtests: 12 passed\x1b[0m\n' },
+      pg_bs0: { buf: 'scout output that must NOT appear (other page)\n' },
+    },
+  };
+  const ctx = buildContext(snap);
+  assert.ok(ctx.includes('bay 1 [id=pg_as0] "hangar"'));
+  assert.ok(ctx.includes('RUNNING'));
+  assert.ok(ctx.includes('FOCUSED'), 'bay 2 on page 1 is where the user is');
+  assert.ok(ctx.includes('tests: 12 passed'), 'on-screen running bay shows its tail');
+  assert.ok(!ctx.includes('must NOT appear'), 'off-screen tails stay out of the prompt');
+  assert.ok(ctx.includes('Page 2'));
+});

@@ -40,10 +40,34 @@
     </div>
 
     <div class="foot-right">
+      <!-- jarvis: click = ears on/off · right-click = talk without the wake word -->
+      <button id="orb" class="orb" data-phase="off" type="button">
+        <span class="orb-dot" aria-hidden="true"></span>
+        <span class="orb-label">jarvis</span>
+      </button>
       <span id="count" class="count">0 running</span>
       <button id="killall" class="ghost" title="Stop every running agent">stop all</button>
     </div>
   </footer>
+
+  <!-- What jarvis heard / said. Lives above the footer, never over a terminal's prompt. -->
+  <div id="voice-toast" role="status" hidden></div>
+
+  <!-- Three sentences → a voiceprint. The sentences are throwaway; the ~3 seconds of
+       YOUR voice in each is what enrolls. After this, jarvis obeys that voice only. -->
+  <dialog id="enroll">
+    <h2>jarvis needs to learn your voice</h2>
+    <p class="enroll-why">Read each line aloud, one at a time. From then on, only this voice can command your agents — anyone else (including jarvis hearing itself) is ignored.</p>
+    <ol>
+      <li class="phrase current">Jarvis, benim sesim anahtarımdır ve bu hangar benim kontrolümde.</li>
+      <li class="phrase">Dokuz ajan da yalnızca benim komutlarımla çalışır, başka kimseyi dinlemezler.</li>
+      <li class="phrase">Bugün projeler yolunda gidiyor ve her şey kontrol altında görünüyor.</li>
+    </ol>
+    <div class="enroll-acts">
+      <button class="capture" type="button">record line 1</button>
+      <button class="cancel ghost" type="button">cancel</button>
+    </div>
+  </dialog>
 
   <!-- One template, nine bays. A bay is empty (a +) or filled (a terminal). -->
   <template id="bay-tpl">
@@ -71,6 +95,8 @@
 
   <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="mic.js"></script>
   <script src="app.js"></script>
+  <script src="voice-ui.js"></script>
 </body>
 </html>

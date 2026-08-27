@@ -207,8 +207,82 @@ body {
 .term .xterm-viewport::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
 .term .xterm-viewport::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
+/* ── jarvis: the orb ──────────────────────────────────────────────────────── */
+/* One dot tells the whole story: grey asleep, green breathing while it listens, cyan
+   when it hears speech, amber pulsing while the brain thinks, and solid bright when it
+   talks back. The label repeats it in words for anyone not fluent in dot. */
+.orb {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 24px; padding: 0 8px;
+  border-radius: 999px; border: 1px solid var(--line);
+  background: transparent; color: var(--muted);
+  font: inherit; font-size: 12px; cursor: pointer;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.orb:hover { color: var(--txt); border-color: var(--line-2); background: var(--panel-2); }
+.orb-dot {
+  width: 8px; height: 8px; border-radius: 999px; flex: none;
+  background: var(--muted);
+  transition: background .2s, box-shadow .2s;
+}
+.orb[data-phase="boot"] .orb-dot { background: var(--muted); animation: orb-breathe 1s ease-in-out infinite; }
+.orb[data-phase="listening"] { color: var(--txt); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.orb[data-phase="listening"] .orb-dot {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(74, 222, 128, .6);
+  animation: orb-breathe 2.6s ease-in-out infinite;
+}
+.orb[data-phase="hearing"] .orb-dot { background: var(--cyan); box-shadow: 0 0 10px rgba(94, 234, 212, .8); animation: none; }
+.orb[data-phase="thinking"] .orb-dot { background: var(--amber); box-shadow: 0 0 8px rgba(251, 191, 36, .6); animation: orb-breathe .8s ease-in-out infinite; }
+.orb[data-phase="speaking"] .orb-dot { background: var(--accent); box-shadow: 0 0 12px rgba(74, 222, 128, .9); animation: none; }
+.orb[data-phase="enroll"] .orb-dot { background: var(--cyan); animation: orb-breathe 1.4s ease-in-out infinite; }
+/* ears on, but no voiceprint yet: the amber ring is the "it will obey nobody" warning */
+.orb.needs-enroll { border-color: var(--amber); }
+/* somebody ELSE spoke — one short red flare, then back to normal */
+.orb.rejected .orb-dot { background: var(--red); box-shadow: 0 0 10px rgba(248, 113, 113, .8); animation: none; }
+@keyframes orb-breathe { 50% { opacity: .35; } }
+
+/* ── what jarvis heard / said ─────────────────────────────────────────────── */
+#voice-toast {
+  position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%);
+  max-width: min(680px, 80vw);
+  padding: 8px 16px;
+  border-radius: 999px; border: 1px solid var(--line-2);
+  background: rgba(11, 16, 13, .92); backdrop-filter: blur(12px);
+  color: var(--txt); font-size: 12px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: var(--shadow);
+  z-index: 10;
+}
+#voice-toast[hidden] { display: none; }
+
+/* ── enrollment ───────────────────────────────────────────────────────────── */
+#enroll {
+  width: min(520px, 84vw);
+  padding: 24px; border: 1px solid var(--line-2); border-radius: var(--radius);
+  background: var(--panel); color: var(--txt);
+  font: inherit; box-shadow: var(--shadow);
+}
+#enroll::backdrop { background: rgba(5, 8, 7, .7); backdrop-filter: blur(4px); }
+#enroll h2 { margin: 0 0 8px; font-size: 16px; }
+#enroll .enroll-why { margin: 0 0 16px; color: var(--muted); font-size: 12px; }
+#enroll ol { margin: 0 0 20px; padding-left: 20px; display: grid; gap: 8px; }
+#enroll .phrase { color: var(--muted); transition: color .12s; }
+#enroll .phrase.current { color: var(--txt); font-weight: 650; }
+#enroll .phrase.current::marker { color: var(--accent); }
+#enroll .phrase.done { color: var(--accent); }
+#enroll .phrase.done::after { content: " ✓"; }
+.enroll-acts { display: flex; gap: 8px; align-items: center; }
+#enroll .capture {
+  height: 28px; padding: 0 12px;
+  border-radius: 8px; border: 1px solid var(--accent);
+  background: rgba(74, 222, 128, .12); color: var(--txt);
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+#enroll .capture:disabled { opacity: .6; cursor: wait; }
+
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; }
+  * { transition: none !important; animation: none !important; }
   .dot.running { box-shadow: none; }
 }
 

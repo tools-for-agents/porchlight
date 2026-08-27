@@ -21,6 +21,11 @@ let state = { pages: [{ id: 'pg_1', bays: Array(BAYS_PER_PAGE).fill(null) }] };
 let readOnly = false;
 let pageIndex = 0;
 let zoomed = null;      // bay id filling the grid, or null
+let focusedBay = null;  // last terminal the user was typing in — jarvis's "here"
+
+// jarvis's brain needs to know what "here" means: the page on screen and the bay whose
+// terminal last held focus. Pushed, not polled — it changes on exactly these code paths.
+const sendView = () => window.hangar.voice?.view({ page: pageIndex, focused: focusedBay });
 
 /** id -> { term, fit, ro, running } for bays that have ever been rendered */
 const terms = new Map();
@@ -188,6 +193,7 @@ function renderAll() {
   renderGrid();
   renderPages();
   updateCount();
+  sendView();
 }
 
 function updateCount() {
@@ -294,6 +300,8 @@ async function mountTerm(id, host, slot, bay) {
   if (!rec.opened) {
     rec.term.open(rec.el);            // open() measures, so it must be in the DOM already
     rec.opened = true;
+    // the textarea only exists after open(); its focus is what "the bay I'm in" means
+    rec.term.textarea?.addEventListener('focus', () => { focusedBay = id; sendView(); });
     const buf = await window.hangar.buffer(id);
     if (buf) rec.term.write(buf);     // replay whatever ran before this tile existed
   }
@@ -332,6 +340,7 @@ async function closeBay(id, slot) {
   rec?.ro?.disconnect();
   rec?.term.dispose();
   terms.delete(id);
+  if (focusedBay === id) focusedBay = null;
   state.pages[pageIndex].bays[slot] = null;
   save();
   renderAll();

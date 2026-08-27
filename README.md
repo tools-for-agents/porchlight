@@ -73,6 +73,7 @@ npm run dist       # → dist/
 | page `+` | add another page of nine |
 | page `✕` | close a page (hover a page tab; it asks first if agents are running) |
 | `stop all` | kill every running agent |
+| orb / `⌘⇧J` | jarvis, the voice — see below |
 
 Click into a tile and type — it is a real terminal, so `shift+tab` cycles permission modes,
 `esc` interrupts, and `/` commands work.
@@ -82,6 +83,43 @@ not enough to work with it. So zoom (`⤢`, or double-click a title bar) gives o
 whole window and a full-height terminal; the other eight keep running behind it. Switching pages does not disturb an agent: the
 process keeps running and the tile replays its output when you come back. Quitting hangar
 stops every agent it started.
+
+## jarvis — talking to your agents
+
+The orb in the footer is a voice. Turn it on (click, or `⌘⇧J`), teach it your voice once
+— three sentences read aloud — and from then on:
+
+> **“Jarvis, bay üç nasıl gidiyor?”** — it reads that bay's terminal and tells you, out loud.
+> **“Jarvis, run the tests in the hangar project.”** — it types the prompt into that bay's agent.
+> **“Jarvis, dur.”** — it interrupts the agent, the way `esc` would.
+
+The listening runs on this Mac and never leaves it: [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)
+does the hearing (Silero VAD) and the reading (Whisper small — Turkish and English both).
+The *talking* is a woman's voice, and realistic: Microsoft Edge's neural
+`tr-TR-EmelNeural` / `en-US-JennyNeural` over the network (~1s to synthesize, no key, no
+account — the same endpoint Edge's "Read Aloud" uses), falling back to local Piper voices
+when offline (`tr_TR-dfki` / `en_US-amy` — Piper simply has no female Turkish voice, so
+the offline Turkish fallback is the one male voice in the set). The *thinking* is
+`claude -p` — what you said, plus each bay's recent output, goes to the same `claude`
+your bays already run, on your same account.
+
+**It obeys one voice: yours.** Every utterance is turned into a 512-dim voiceprint and
+compared against the one you enrolled; anyone else in the room — or jarvis hearing itself
+through your speakers — scores a stranger and is dropped before a word is transcribed.
+Until you enroll, it obeys nobody. After jarvis answers, you have ~25 seconds to follow
+up without the wake word; a right-click on the orb arms one wake-word-free utterance.
+
+Setup is two commands:
+
+```sh
+npm run voice-models   # one-time, ~840MB down / ~570MB kept (VAD + whisper + voiceprint + two piper voices)
+# then: turn on the orb, allow the microphone, read the three lines
+```
+
+The models live in `~/Library/Application Support/hangar/voice-models`; the voiceprint in
+`voice-profile.json` next to your state file — delete it and jarvis is deaf to everyone
+again. `voice.json` alongside takes `{"wake": "...", "model": "haiku"}` if you want a
+different wake word or a different brain.
 
 ## Why it looks like this
 

@@ -42,4 +42,19 @@ contextBridge.exposeInMainWorld('hangar', {
 
   onData: (fn) => ipcRenderer.on('bay:data', (_e, p) => fn(p)),
   onExit: (fn) => ipcRenderer.on('bay:exit', (_e, p) => fn(p)),
+
+  // jarvis — the voice. The renderer contributes the microphone (getUserMedia lives
+  // there) and the orb; every decision — whose voice, which bay, what to type — is made
+  // in main. Raw audio goes DOWN this bridge; only status events ever come back up.
+  voice: {
+    toggle: () => ipcRenderer.invoke('voice:toggle'),
+    status: () => ipcRenderer.invoke('voice:status'),
+    frame: (buf) => ipcRenderer.send('voice:frame', buf),
+    view: (v) => ipcRenderer.send('voice:view', v),
+    ptt: () => ipcRenderer.send('voice:ptt'),
+    enrollStart: () => ipcRenderer.send('voice:enroll-start'),
+    enrollCapture: () => ipcRenderer.send('voice:enroll-capture'),
+    enrollCancel: () => ipcRenderer.send('voice:enroll-cancel'),
+    onEvent: (fn) => ipcRenderer.on('voice:event', (_e, p) => fn(p)),
+  },
 });

@@ -1,12 +1,13 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut, systemPreferences } = require('electron');
 const { execFile } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const pty = require('node-pty');
 const { stateStore, BAYS_PER_PAGE } = require('./state.js');
+const { createJarvis } = require('./voice/jarvis.js');
 
 // ── What a bay actually runs ─────────────────────────────────────────────────
 // The whole app is a launcher for exactly this. It is written here, once, in the open,
@@ -361,6 +362,42 @@ ipcMain.handle('state:load', () => loadState());
 ipcMain.handle('state:save', (_e, state) => { saveState(state); return { ok: true }; });
 ipcMain.handle('open-folder', (_e, { cwd }) => shell.openPath(cwd));
 
+// ── jarvis: the voice ────────────────────────────────────────────────────────
+// All policy is in src/voice/jarvis.js; this block only gives it hands: the live bays
+// map, the state file, the claude lookup, and a line to the renderer. Constructed lazily
+// because userData is not decided until the app is ready.
+let jarvis = null;
+const getJarvis = () => (jarvis ??= createJarvis({
+  userDataDir: app.getPath('userData'),
+  bays,
+  loadState,
+  findClaude,
+  loginEnv,
+  send,
+  dbg,
+}));
+
+async function voiceToggle() {
+  const j = getJarvis();
+  if (!j.enabled && process.platform === 'darwin') {
+    // Ask macOS for the mic BEFORE flipping on: getUserMedia in the renderer would just
+    // fail with a NotAllowedError that looks exactly like a broken feature.
+    const ok = await systemPreferences.askForMediaAccess('microphone').catch(() => false);
+    if (!ok) { send('voice:event', { t: 'need', what: 'mic' }); return j.status(); }
+  }
+  j.setEnabled(!j.enabled);
+  return j.status();
+}
+
+ipcMain.handle('voice:toggle', () => voiceToggle());
+ipcMain.handle('voice:status', () => getJarvis().status());
+ipcMain.on('voice:frame', (_e, buf) => getJarvis().frame(buf));
+ipcMain.on('voice:view', (_e, v) => getJarvis().setView(v));
+ipcMain.on('voice:ptt', () => getJarvis().ptt());
+ipcMain.on('voice:enroll-start', () => getJarvis().enrollStart());
+ipcMain.on('voice:enroll-capture', () => getJarvis().enrollCapture());
+ipcMain.on('voice:enroll-cancel', () => getJarvis().enrollCancel());
+
 // ── Window ───────────────────────────────────────────────────────────────────
 // The logo, in the Dock. A packaged .app gets build/icon.icns from electron-builder, but
 // `npm start` shows Electron's own icon unless we say otherwise — and "the icon is only
@@ -425,9 +462,17 @@ app.whenReady().then(() => {
   usageTimer = setInterval(refreshUsage, USAGE_EVERY);
   findClaude();   // warm the lookup so the first + is not the thing that waits on a shell
   loginEnv();
+  // ⌘⇧J: jarvis on/off from anywhere — a voice assistant you must first click is a
+  // clipboard you must first screenshot. Failure to register is fine (another app owns
+  // it); the orb still works.
+  try { globalShortcut.register('CommandOrControl+Shift+J', () => voiceToggle()); } catch { /* orb remains */ }
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
 // Nine unattended agents must not outlive the window that was watching them.
-app.on('before-quit', () => { for (const id of [...bays.keys()]) killBay(id); });
+app.on('before-quit', () => {
+  jarvis?.shutdown();
+  globalShortcut.unregisterAll();
+  for (const id of [...bays.keys()]) killBay(id);
+});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
