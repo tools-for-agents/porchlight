@@ -90,6 +90,10 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
     brainTimeout: 240_000,
     threshold: null,       // null → the value enrollment measured, or the engine's default
     sttLang: 'tr',         // the owner speaks Turkish to her; '' lets whisper guess per utterance
+    // The owner's arrangement (their own words: "ben türkçe konuşayım, o ingilizce
+    // konuşsun"): mira ALWAYS answers in English — her voice is only natural there.
+    // 'tr' pins Turkish back; 'match' mirrors whatever the user spoke.
+    replyLang: 'en',
     ...saved,
     // Her voice: ONE voice for both languages — Edge's Ava (multilingual: natural in
     // Turkish AND English, warm where Emel was flat), piper's dfki/amy offline fallback.
@@ -116,6 +120,26 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
   let enrollTaken = [];    // embeddings collected so far this enrollment
   let history = [];
   let warnedUnenrolled = false;
+
+  // Everything mira says out of her own head (not the brain's replies) in both tongues;
+  // pl() picks per cfg.replyLang, falling back to the user's language under 'match'.
+  const PHRASES = {
+    en: {
+      summons: 'Yes?',
+      acks: ['On it.', 'One moment, looking.', 'Checking now.'],
+      stopped: 'Stopped.', nothingRunning: 'Nothing was running.',
+      noAnswer: "I couldn't come up with an answer to that — ask me again?",
+      enrolled: 'Got your voice. From now on I only listen to you.',
+    },
+    tr: {
+      summons: 'Efendim?',
+      acks: ['Bakıyorum efendim.', 'Hemen bakıyorum.', 'Bir saniye, bakıyorum.'],
+      stopped: 'Durdurdum.', nothingRunning: 'Duran bir ajan göremiyorum.',
+      noAnswer: 'Buna bir cevap üretemedim, tekrar sorar mısın?',
+      enrolled: 'Sesini tanıdım. Artık sadece seni dinliyorum.',
+    },
+  };
+  const pl = (cmd) => (cfg.replyLang === 'en' || cfg.replyLang === 'tr') ? cfg.replyLang : guessLang(cmd || 'tamam');
 
   const event = (p) => send('voice:event', p);
   const setPhase = (p) => { if (phase !== p) { phase = p; event({ t: 'phase', phase: p }); } };
@@ -250,7 +274,8 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
 
     if (!command) {   // "Mira." — a summons with no order
       followUpUntil = Date.now() + FOLLOW_UP_MS;
-      speak('Efendim?', 'tr');
+      const L = pl('');
+      speak(PHRASES[L].summons, L);
       return;
     }
 
@@ -260,18 +285,14 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
 
     setPhase('thinking');
     if (cfg.ack) {
-      const tr = guessLang(command) === 'tr';
-      const acks = tr ? ['Bakıyorum efendim.', 'Hemen bakıyorum.', 'Bir saniye, bakıyorum.']
-                      : ['On it.', 'One moment, looking.', 'Checking now.'];
-      speak(acks[Math.floor(Math.random() * acks.length)], tr ? 'tr' : 'en');
+      const L = pl(command);
+      const acks = PHRASES[L].acks;
+      speak(acks[Math.floor(Math.random() * acks.length)], L);
     }
     const reply = await think(command);
     const muted = muteReply; muteReply = false;   // "sus" while she thought → text only
     if (!reply) {
-      if (!muted) {
-        speak(guessLang(command) === 'tr' ? 'Buna bir cevap üretemedim, tekrar sorar mısın?'
-                                          : "I couldn't come up with an answer to that, ask me again?", guessLang(command));
-      }
+      if (!muted) { const L = pl(command); speak(PHRASES[L].noAnswer, L); }
       return;
     }
     for (const a of reply.actions) act(a);
@@ -280,7 +301,9 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
     history.push({ heard: command, said: reply.say });
     history = history.slice(-HISTORY_KEPT);
     followUpUntil = Date.now() + FOLLOW_UP_MS;
-    if (!muted) speak(reply.say, reply.lang || guessLang(reply.say));
+    // a pinned replyLang also pins the VOICE — if the brain disobeys and answers in
+    // Turkish anyway, Ava still reads it (multilingual), just less at home
+    if (!muted) speak(reply.say, cfg.replyLang === 'match' ? (reply.lang || guessLang(reply.say)) : cfg.replyLang);
   }
 
   // Stops skip the brain entirely: "dur" must not wait 40 seconds for opus to agree.
@@ -310,8 +333,9 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
     }
     for (const id of targets) { try { bays.get(id).proc.write('\x1b'); } catch { /* raced with exit */ } }
     dbg(`jarvis: quick stop → ${targets.length ? targets.join(', ') : 'nothing running'}`);
-    event({ t: 'say', text: 'Durdurdum.', actions: targets.length, bays: targets });
-    speak(targets.length ? 'Durdurdum.' : 'Duran bir ajan göremiyorum.', 'tr');
+    const L = pl(command);
+    event({ t: 'say', text: PHRASES[L].stopped, actions: targets.length, bays: targets });
+    speak(targets.length ? PHRASES[L].stopped : PHRASES[L].nothingRunning, L);
     followUpUntil = Date.now() + FOLLOW_UP_MS;
     return true;
   }
@@ -331,7 +355,7 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
       return await brain.ask({
         bin, env, model: cfg.model, effort: cfg.effort, snap,
         transcript: command, history, timeoutMs: cfg.brainTimeout,
-        projectsDir: projectsDir(), dbg,
+        projectsDir: projectsDir(), replyLang: cfg.replyLang, dbg,
       });
     } finally {
       busyThinking = false;
@@ -485,7 +509,8 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
     sendProfile();
     event({ t: 'enroll-done', threshold: +threshold.toFixed(3) });
     setPhase('listening');
-    speak('Sesini tanıdım. Artık sadece seni dinliyorum.', 'tr');
+    const L = pl('');
+    speak(PHRASES[L].enrolled, L);
   }
 
   // ── surface for main.js ────────────────────────────────────────────────────

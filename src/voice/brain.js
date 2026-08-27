@@ -69,7 +69,7 @@ function buildContext(snap) {
   return lines.join('\n');
 }
 
-function buildPrompt(snap, transcript, history, mem = [], projectsDir = '') {
+function buildPrompt(snap, transcript, history, mem = [], projectsDir = '', replyLang = 'match') {
   const past = (history || [])
     .map((h) => `user said: ${h.heard}\nyou said: ${h.said}`)
     .join('\n');
@@ -119,7 +119,11 @@ function buildPrompt(snap, transcript, history, mem = [], projectsDir = '') {
     '  destructive. Closing an idle or finished session is fine to just do.',
     '',
     'Rules:',
-    '- "say" is SPEECH: short (1-3 sentences), natural, no lists, no file paths, no code. Match the language the user spoke.',
+    // The owner's arrangement: they speak Turkish, mira answers in English — her voice
+    // is only natural there. replyLang pins it; 'match' restores mirror-the-user.
+    replyLang === 'match'
+      ? '- "say" is SPEECH: short (1-3 sentences), natural, no lists, no file paths, no code. Match the language the user spoke.'
+      : `- "say" is SPEECH: short (1-3 sentences), natural, no lists, no file paths, no code. ALWAYS answer in ${replyLang === 'en' ? 'ENGLISH — the user speaks Turkish to you and understands English fine; do NOT mirror their language' : 'TURKISH'}. Set "lang":"${replyLang}".`,
     '- The user talks about projects NATURALLY — by name ("hangar", "oyun"), by topic, or as "şu iş"/"bu',
     '  iş"/"orada". Resolve: an explicit name beats everything; "şu/bu iş" means the FOCUSED bay if there is',
     '  one, else whatever the recent exchange or memory says they were working on. Only ask when truly stuck.',
@@ -175,10 +179,10 @@ function parseReply(text) {
  * the wait by speaking an acknowledgement first.
  * @returns {Promise<{say,lang,actions}|null>}
  */
-function ask({ bin, env, model, effort, snap, transcript, history, projectsDir = '', timeoutMs = 240_000, dbg = () => {} }) {
+function ask({ bin, env, model, effort, snap, transcript, history, projectsDir = '', replyLang = 'match', timeoutMs = 240_000, dbg = () => {} }) {
   return new Promise((resolve) => {
     const mem = gatherMemory(snap);
-    const prompt = buildPrompt(snap, transcript, history, mem, projectsDir);
+    const prompt = buildPrompt(snap, transcript, history, mem, projectsDir, replyLang);
     const args = ['-p', '--model', model, '--dangerously-skip-permissions'];
     if (effort) args.push('--effort', effort);
     dbg(`brain: asking ${model}${effort ? `/${effort}` : ''} (${prompt.length} chars, ${mem.length} memory indexes)`);
