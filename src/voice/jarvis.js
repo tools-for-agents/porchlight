@@ -116,35 +116,59 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
   });
 
   // ── the sidecar ────────────────────────────────────────────────────────────
-  function startEngine() {
-    if (engine) return;
-    const enginePath = unpacked(path.join(__dirname, 'engine.js'));
-    const dylibDir = unpacked(path.join(__dirname, '..', '..', 'node_modules', 'sherpa-onnx-darwin-arm64'));
-    dbg(`jarvis: spawning engine (models: ${modelsDir()})`);
-    setPhase('boot');
-    engine = spawn(process.execPath, [enginePath, '--models', modelsDir(), '--serve'], {
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
-        DYLD_LIBRARY_PATH: `${dylibDir}:${process.env.DYLD_LIBRARY_PATH || ''}`,
-      },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    let buf = '';
-    engine.stdout.on('data', (d) => {
-      buf += d;
-      let nl;
-      while ((nl = buf.indexOf('\n')) !== -1) {
-        const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
-        try { onEngine(JSON.parse(line)); } catch { /* half a line, or noise */ }
+  // The engine must run in a REAL node, not in Electron-as-node: sherpa-onnx hands
+  // audio back as external buffers, and Electron's V8 memory cage refuses those with
+  // "External buffers are not allowed" — ELECTRON_RUN_AS_NODE does not lift the cage.
+  // So find node the way main.js finds claude: on the login shell's PATH. Only a
+  // machine with no node at all falls back to Electron, where voice cannot work.
+  let nodePathPromise = null;
+  function findNode() {
+    if (nodePathPromise) return nodePathPromise;
+    nodePathPromise = loginEnv().then((env) => {
+      for (const d of (env.PATH || '').split(':')) {
+        if (d && fs.existsSync(path.join(d, 'node'))) return path.join(d, 'node');
       }
+      return ['/opt/homebrew/bin/node', '/usr/local/bin/node'].find((p) => fs.existsSync(p)) || null;
     });
-    engine.stderr.on('data', (d) => dbg(`engine! ${String(d).trim()}`));
-    engine.on('exit', (code) => {
-      dbg(`jarvis: engine exited (${code})`);
-      engine = null; engineReady = false;
-      if (enabled) { setPhase('boot'); setTimeout(() => { if (enabled) startEngine(); }, 2000); }
-      else setPhase('off');
+    return nodePathPromise;
+  }
+
+  let engineStarting = false;
+  function startEngine() {
+    if (engine || engineStarting) return;
+    engineStarting = true;
+    setPhase('boot');
+    findNode().then((nodeBin) => {
+      engineStarting = false;
+      if (engine) return;
+      if (!enabled) { setPhase('off'); return; }
+      const enginePath = unpacked(path.join(__dirname, 'engine.js'));
+      const dylibDir = unpacked(path.join(__dirname, '..', '..', 'node_modules', 'sherpa-onnx-darwin-arm64'));
+      dbg(`jarvis: spawning engine with ${nodeBin || `${process.execPath} (NO node on PATH — sherpa will refuse)`} (models: ${modelsDir()})`);
+      engine = spawn(nodeBin || process.execPath, [enginePath, '--models', modelsDir(), '--serve'], {
+        env: {
+          ...process.env,
+          ELECTRON_RUN_AS_NODE: '1',
+          DYLD_LIBRARY_PATH: `${dylibDir}:${process.env.DYLD_LIBRARY_PATH || ''}`,
+        },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      let buf = '';
+      engine.stdout.on('data', (d) => {
+        buf += d;
+        let nl;
+        while ((nl = buf.indexOf('\n')) !== -1) {
+          const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+          try { onEngine(JSON.parse(line)); } catch { /* half a line, or noise */ }
+        }
+      });
+      engine.stderr.on('data', (d) => dbg(`engine! ${String(d).trim()}`));
+      engine.on('exit', (code) => {
+        dbg(`jarvis: engine exited (${code})`);
+        engine = null; engineReady = false;
+        if (enabled) { setPhase('boot'); setTimeout(() => { if (enabled) startEngine(); }, 2000); }
+        else setPhase('off');
+      });
     });
   }
 
