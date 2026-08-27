@@ -73,9 +73,12 @@ basicConstraints = critical,CA:false
 keyUsage = critical,digitalSignature
 extendedKeyUsage = critical,codeSigning
 EOF
-  openssl req -x509 -newkey rsa:2048 -nodes -days 7300 \
+  # /usr/bin/openssl (LibreSSL) on purpose: a brew OpenSSL 3 earlier in PATH exports
+  # PKCS12 as AES-256/PBKDF2, which `security import` refuses with
+  # "MAC verification failed during PKCS12 import (wrong password?)".
+  /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 7300 \
     -keyout "$TMP/key.pem" -out "$TMP/cert.pem" -config "$TMP/openssl.cnf" 2>/dev/null
-  openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
+  /usr/bin/openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
     -out "$TMP/id.p12" -passout pass:"$CN" -name "$CN" 2>/dev/null
 
   # -A: codesign may use the key without a keychain dialog every single time.
@@ -128,7 +131,8 @@ done
 sign --identifier "$APPID" "$APP"
 
 # ── 4. Prove the requirement is the stable kind ──────────────────────────────
-REQ=$(codesign -d -r- "$APP" 2>/dev/null | sed -n 's/^# designated => //p')
+# older codesign prints "# designated => …", newer (macOS 26) drops the "# "
+REQ=$(codesign -d -r- "$APP" 2>/dev/null | sed -nE 's/^(# )?designated => //p')
 echo "▸ designated requirement:"
 echo "    $REQ"
 case "$REQ" in
