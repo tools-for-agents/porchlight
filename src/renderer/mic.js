@@ -41,25 +41,50 @@
     readPos = i - keepFrom;
   }
 
-  async function start() {
-    if (ctx) return true;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
-      ctx = new AudioContext();
-      await ctx.audioWorklet.addModule('mic-worklet.js');
-      const src = ctx.createMediaStreamSource(stream);
-      node = new AudioWorkletNode(ctx, 'mic-tap');
-      node.port.onmessage = (e) => feed(e.data, ctx.sampleRate);
-      src.connect(node);
-      // deliberately NOT connected to ctx.destination: this is a tap, not a monitor
-      return true;
-    } catch (e) {
-      console.warn('mic:', e.message);
-      stop();
-      return false;
+  // The audio thread's half of the tap, INLINED and loaded from a Blob on purpose:
+  // in the packaged app this page lives inside app.asar, and Chromium's loader cannot
+  // fetch a worklet module out of an asar — addModule('mic-worklet.js') "resolves" yet
+  // registers nothing, and AudioWorkletNode dies with "mic-tap is not defined". Found
+  // live: the dev app always worked because there the file is real. Same family as
+  // native modules needing asarUnpack. Hand every 128-sample block over untouched —
+  // that thread has a deadline every 2.7ms; the resample happens over here.
+  const WORKLET = `
+    class MicTap extends AudioWorkletProcessor {
+      process(inputs) {
+        const ch = inputs[0]?.[0];
+        if (ch) this.port.postMessage(ch.slice(0));
+        return true;
+      }
     }
+    registerProcessor('mic-tap', MicTap);
+  `;
+
+  let starting = null;    // two callers, one AudioContext — never interleave two starts
+  function start() {
+    if (ctx) return Promise.resolve(true);
+    if (starting) return starting;
+    starting = (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        });
+        ctx = new AudioContext();
+        await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: 'application/javascript' })));
+        const src = ctx.createMediaStreamSource(stream);
+        node = new AudioWorkletNode(ctx, 'mic-tap');
+        node.port.onmessage = (e) => feed(e.data, ctx.sampleRate);
+        src.connect(node);
+        // deliberately NOT connected to ctx.destination: this is a tap, not a monitor
+        return true;
+      } catch (e) {
+        console.warn('mic:', e.message);
+        stop();
+        return false;
+      } finally {
+        starting = null;
+      }
+    })();
+    return starting;
   }
 
   function stop() {
