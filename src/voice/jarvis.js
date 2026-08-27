@@ -45,7 +45,14 @@ function createJarvis({ userDataDir, bays, loadState, findClaude, loginEnv, send
     // common Turkish sentence-starter is within edit range of it. "jarvis" stays as a
     // second wake word for the habit that named this module.
     wake: ['mira', 'jarvis'],
-    model: 'haiku',        // the brain: fast beats brilliant for "how is bay 3 doing"
+    // The brain, per the owner's explicit spec: STRONG over fast — opus at xhigh effort,
+    // locally, with tools and the memory dirs. A status question costs ~30-60s; the ack
+    // line and the instant stop path below are what make that livable. voice.json can
+    // set {"model":"haiku","effort":null,"ack":false} to trade depth back for speed.
+    model: 'opus',
+    effort: 'xhigh',
+    ack: true,             // speak "bakıyorum" the moment a command lands, then think
+    brainTimeout: 240_000,
     threshold: null,       // null → the value enrollment measured, or the engine's default
     ...saved,
     // Her voice: Edge's neural Emel/Jenny when the network is there (realistic), piper's
@@ -170,13 +177,23 @@ function createJarvis({ userDataDir, bays, loadState, findClaude, loginEnv, send
     if (command === null) { event({ t: 'heard', text, acted: false }); return; }
     event({ t: 'heard', text, acted: true });
 
-    if (!command) {   // "Jarvis." — a summons with no order
+    if (!command) {   // "Mira." — a summons with no order
       followUpUntil = Date.now() + FOLLOW_UP_MS;
       speak('Efendim?', 'tr');
       return;
     }
 
+    // "Dur" must not wait 40 seconds for opus to agree. A bare stop word goes straight
+    // to Esc — the focused bay if there is one, else every running bay on this page.
+    if (quickStop(command)) return;
+
     setPhase('thinking');
+    if (cfg.ack) {
+      const tr = guessLang(command) === 'tr';
+      const acks = tr ? ['Bakıyorum efendim.', 'Hemen bakıyorum.', 'Bir saniye, bakıyorum.']
+                      : ['On it.', 'One moment, looking.', 'Checking now.'];
+      speak(acks[Math.floor(Math.random() * acks.length)], tr ? 'tr' : 'en');
+    }
     const reply = await think(command);
     if (!reply) {
       speak(guessLang(command) === 'tr' ? 'Buna bir cevap üretemedim, tekrar sorar mısın?'
@@ -192,6 +209,29 @@ function createJarvis({ userDataDir, bays, loadState, findClaude, loginEnv, send
     speak(reply.say, reply.lang || guessLang(reply.say));
   }
 
+  // "Dur" as the whole command (with maybe one word after it) skips the brain entirely.
+  // "sus" only silences her — the barge-in already killed the player by the time we're here.
+  function quickStop(command) {
+    const words = command.toLowerCase().split(/\s+/).map((w) => w.replace(/[^\p{L}]/gu, '')).filter(Boolean);
+    if (!words.length || words.length > 2) return false;
+    if (!['dur', 'durun', 'stop', 'iptal', 'sus'].includes(words[0])) return false;
+    if (words[0] === 'sus') { setPhase('listening'); return true; }
+    const targets = [];
+    if (view.focused && bays.get(view.focused) && !bays.get(view.focused).exited) {
+      targets.push(view.focused);
+    } else {
+      const pageId = loadState().pages?.[view.page]?.id;
+      for (const [id, b] of bays) if (!b.exited && pageId && id.startsWith(`${pageId}s`)) targets.push(id);
+    }
+    for (const id of targets) { try { bays.get(id).proc.write('\x1b'); } catch { /* raced with exit */ } }
+    dbg(`jarvis: quick stop → ${targets.length ? targets.join(', ') : 'nothing running'}`);
+    event({ t: 'say', text: 'Durdurdum.', actions: targets.length, bays: targets });
+    speak(targets.length ? 'Durdurdum.' : 'Duran bir ajan göremiyorum.', 'tr');
+    followUpUntil = Date.now() + FOLLOW_UP_MS;
+    return true;
+  }
+
+  let busyThinking = false;
   async function think(command) {
     const bin = await findClaude();
     if (!bin) return null;
@@ -200,7 +240,15 @@ function createJarvis({ userDataDir, bays, loadState, findClaude, loginEnv, send
     const running = {};
     for (const [id, b] of bays) if (!b.exited) running[id] = { buf: b.buf };
     const snap = { pages: state.pages || [], pageIndex: view.page, focusedBayId: view.focused, running };
-    return brain.ask({ bin, env, model: cfg.model, snap, transcript: command, history, dbg });
+    busyThinking = true;
+    try {
+      return await brain.ask({
+        bin, env, model: cfg.model, effort: cfg.effort, snap,
+        transcript: command, history, timeoutMs: cfg.brainTimeout, dbg,
+      });
+    } finally {
+      busyThinking = false;
+    }
   }
 
   function act(a) {
@@ -229,7 +277,8 @@ function createJarvis({ userDataDir, bays, loadState, findClaude, loginEnv, send
     player = execFile('/usr/bin/afplay', [wav], () => {
       player = null;
       fs.unlink(wav, () => {});
-      if (enabled && phase === 'speaking') setPhase('listening');
+      // the ack line ends long before opus does — fall back to 'thinking', not 'listening'
+      if (enabled && phase === 'speaking') setPhase(busyThinking ? 'thinking' : 'listening');
       followUpUntil = Date.now() + FOLLOW_UP_MS;
     });
   }

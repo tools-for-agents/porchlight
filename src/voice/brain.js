@@ -6,7 +6,36 @@
 // answer. buildPrompt and parseReply are pure and tested; ask() is the one impure edge.
 
 const { execFile } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { tail } = require('./ansi.js');
+
+// ── memory ───────────────────────────────────────────────────────────────────
+// Claude Code keeps a per-project memory at ~/.claude/projects/<munged-cwd>/memory —
+// the munge is every / and . flattened to '-'. Mira's brain gets each bay's MEMORY.md
+// index INLINE (small, instant) and reads the files behind it with its own tools when
+// an answer needs more than the index line.
+function memoryDirFor(cwd, home = os.homedir()) {
+  return path.join(home, '.claude', 'projects', String(cwd).replace(/[/.]/g, '-'), 'memory');
+}
+
+function gatherMemory(snap, home = os.homedir()) {
+  const dirs = [];
+  for (const page of snap.pages) {
+    for (const bay of page.bays || []) if (bay) dirs.push({ title: bay.title, dir: memoryDirFor(bay.path, home) });
+  }
+  dirs.push({ title: 'global (home)', dir: memoryDirFor(home, home) });
+  const seen = new Set(), out = [];
+  for (const { title, dir } of dirs) {
+    if (seen.has(dir)) continue;
+    seen.add(dir);
+    try {
+      out.push({ title, dir, index: fs.readFileSync(path.join(dir, 'MEMORY.md'), 'utf8').slice(0, 4000) });
+    } catch { /* no memory there — not every folder has a past */ }
+  }
+  return out.slice(0, 6);
+}
 
 /**
  * @param {object} snap
@@ -38,10 +67,14 @@ function buildContext(snap) {
   return lines.join('\n');
 }
 
-function buildPrompt(snap, transcript, history) {
+function buildPrompt(snap, transcript, history, mem = []) {
   const past = (history || [])
     .map((h) => `user said: ${h.heard}\nyou said: ${h.said}`)
     .join('\n');
+  const memBlock = mem.length
+    ? '\nWhat you remember (each project\'s MEMORY.md index; the files it points at live in the same dir):\n'
+      + mem.map((m) => `--- ${m.title} · ${m.dir} ---\n${m.index}`).join('\n')
+    : '';
   return [
     'You are Mira, the voice of "hangar" — a desktop app running Claude Code agents in a 3x3 grid of',
     'terminal tiles called bays. (The user may also call you jarvis; both are you.)',
@@ -50,19 +83,33 @@ function buildPrompt(snap, transcript, history) {
     'Bays right now (numbers are what the user says out loud; ids are what actions take):',
     buildContext(snap),
     past ? '\nRecent exchange:\n' + past : '',
+    memBlock,
     '',
     `The user just said: "${transcript}"`,
     '',
-    'Answer ONLY with a JSON object, no markdown fences, no prose around it:',
+    'You have tools (Read, Grep, Glob, Write, Bash). Use them when they make the answer TRUE rather than',
+    'plausible — read the memory files behind an index line, grep a project, peek at a file a bay mentioned.',
+    'Do not wander: a couple of reads, then answer. The user\'s standing rules are in ~/.claude/CLAUDE.md.',
+    '',
+    'MEMORY — you may also WRITE it. When the user asks you to remember something ("not al", "hatırla",',
+    '"kaydet", "remember"), or a durable decision/fact emerges, persist it into the relevant project\'s',
+    'memory dir (paths above): one markdown file per fact with the same frontmatter shape the dir already',
+    'uses, plus a one-line pointer in that dir\'s MEMORY.md. Update an existing file over duplicating it.',
+    'Never rewrite MEMORY.md wholesale — append or edit your one line.',
+    '',
+    'Your FINAL message must be ONLY this JSON object — no markdown fences, no prose around it:',
     '{"say": "<spoken reply>", "lang": "tr"|"en", "actions": [{"type":"send","bay":"<id>","text":"<prompt for that agent>"} | {"type":"esc","bay":"<id>"}]}',
     '',
     'Rules:',
     '- "say" is SPEECH: short (1-3 sentences), natural, no lists, no file paths, no code. Match the language the user spoke.',
-    '- Asked how a bay is doing → read its last output above and summarize what the agent is actually doing.',
+    '- The user talks about projects NATURALLY — by name ("hangar", "oyun"), by topic, or as "şu iş"/"bu',
+    '  iş"/"orada". Resolve: an explicit name beats everything; "şu/bu iş" means the FOCUSED bay if there is',
+    '  one, else whatever the recent exchange or memory says they were working on. Only ask when truly stuck.',
+    '- Asked how something is going → the bay\'s last output above is the NOW; memory is the WHY. Combine them:',
+    '  "what is it doing" from the terminal, "where is this in the bigger plan" from memory, briefly.',
     '- Told to do something in a project → action "send": write the instruction as a clear prompt for that bay\'s',
     '  Claude agent (in the language the codebase/agent works in — usually matching the user), and "say" confirms it briefly.',
     '- "Stop/dur/iptal" for a bay → action "esc" (interrupts that agent).',
-    '- Ambiguous which bay → no actions; ask in "say".',
     '- Sounds destructive (deleting, force-pushing, killing work) → no actions; ask for confirmation in "say".',
     '- Nothing to do (a question, a chat) → "actions": [].',
   ].filter((s) => s !== '').join('\n');
@@ -100,14 +147,24 @@ function parseReply(text) {
 
 /**
  * The impure edge: run `claude -p` with the packed prompt on stdin.
+ *
+ * This is the STRONG half of mira — the user's explicit spec: a heavyweight local agent
+ * (opus at xhigh effort by default), with tools, running under the same
+ * --dangerously-skip-permissions this whole app runs its bays under (the owner's
+ * standing choice, see CLAUDE_ARGS in main.js) so it can read and write the memory
+ * dirs the prompt names. Slow and right beats fast and shallow here; jarvis.js masks
+ * the wait by speaking an acknowledgement first.
  * @returns {Promise<{say,lang,actions}|null>}
  */
-function ask({ bin, env, model, snap, transcript, history, timeoutMs = 90_000, dbg = () => {} }) {
+function ask({ bin, env, model, effort, snap, transcript, history, timeoutMs = 240_000, dbg = () => {} }) {
   return new Promise((resolve) => {
-    const prompt = buildPrompt(snap, transcript, history);
-    dbg(`brain: asking ${model} (${prompt.length} chars)`);
+    const mem = gatherMemory(snap);
+    const prompt = buildPrompt(snap, transcript, history, mem);
+    const args = ['-p', '--model', model, '--dangerously-skip-permissions'];
+    if (effort) args.push('--effort', effort);
+    dbg(`brain: asking ${model}${effort ? `/${effort}` : ''} (${prompt.length} chars, ${mem.length} memory indexes)`);
     const t0 = Date.now();
-    const child = execFile(bin, ['-p', '--model', model], { env, timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 },
+    const child = execFile(bin, args, { env, cwd: os.homedir(), timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 },
       (err, stdout) => {
         if (err) { dbg(`brain: ${err.message}`); return resolve(null); }
         const reply = parseReply(stdout);
@@ -119,4 +176,4 @@ function ask({ bin, env, model, snap, transcript, history, timeoutMs = 90_000, d
   });
 }
 
-module.exports = { buildContext, buildPrompt, parseReply, ask };
+module.exports = { buildContext, buildPrompt, parseReply, ask, memoryDirFor, gatherMemory };

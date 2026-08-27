@@ -109,9 +109,17 @@ The *talking* is a woman's voice, and realistic: Microsoft Edge's neural
 `tr-TR-EmelNeural` / `en-US-JennyNeural` over the network (~1s to synthesize, no key, no
 account — the same endpoint Edge's "Read Aloud" uses), falling back to local Piper voices
 when offline (`tr_TR-dfki` / `en_US-amy` — Piper simply has no female Turkish voice, so
-the offline Turkish fallback is the one male voice in the set). The *thinking* is
-`claude -p` — what you said, plus each bay's recent output, goes to the same `claude`
-your bays already run, on your same account.
+the offline Turkish fallback is the one male voice in the set).
+
+The *thinking* is deliberately heavyweight: `claude -p --model opus --effort xhigh`,
+locally, with tools, under the same skip-permissions your bays already run. It gets each
+bay's recent output AND each project's memory index (`~/.claude/projects/*/memory`), can
+read the files behind it, and can WRITE memory back when you say "not al" — so "şu iş
+nasıl gidiyor?" gets answered from what the terminal shows *and* what the plan says,
+without you ever saying a bay number. A deep answer takes ~30-60s; she says "bakıyorum
+efendim" the moment she hears you, a bare **"Mira, dur"** never waits for the brain (it
+Esc's the focused bay instantly), and `voice.json` can set
+`{"model": "haiku", "effort": null, "ack": false}` to trade depth back for speed.
 
 **It obeys one voice: yours.** Every utterance is turned into a 512-dim voiceprint and
 compared against the one you enrolled; anyone else in the room — or jarvis hearing itself

@@ -10,7 +10,7 @@ const assert = require('node:assert');
 
 const { matchWake, guessLang } = require('../src/voice/wake.js');
 const { stripAnsi, tail } = require('../src/voice/ansi.js');
-const { parseReply, buildContext } = require('../src/voice/brain.js');
+const { parseReply, buildContext, buildPrompt, memoryDirFor } = require('../src/voice/brain.js');
 
 // ── wake ─────────────────────────────────────────────────────────────────────
 test('the wake word survives whisper: jarvis, Jarvis!, carvis, Çarvis, jarvıs all wake', () => {
@@ -109,6 +109,30 @@ test('garbage, empty say, or no JSON at all → null, never a throw', () => {
   assert.equal(parseReply('{"say":""}'), null);
   assert.equal(parseReply('{"broken": '), null);
   assert.equal(parseReply(''), null);
+});
+
+// ── memory plumbing ──────────────────────────────────────────────────────────
+test('memoryDirFor: the munge Claude Code actually uses — every / and . becomes -', () => {
+  assert.equal(
+    memoryDirFor('/Users/fatih/Dev/toolsforagents', '/Users/fatih'),
+    '/Users/fatih/.claude/projects/-Users-fatih-Dev-toolsforagents/memory',
+  );
+  assert.equal(
+    memoryDirFor('/a/b.app', '/h'),
+    '/h/.claude/projects/-a-b-app/memory',
+  );
+});
+
+test('buildPrompt: memory indexes ride inline, with their dirs, and the write rules', () => {
+  const snap = { pageIndex: 0, focusedBayId: null, pages: [{ id: 'p', bays: [] }], running: {} };
+  const mem = [{ title: 'hangar', dir: '/h/.claude/projects/x/memory', index: '- [mission](m.md) — ship it' }];
+  const p = buildPrompt(snap, 'şu iş nasıl gidiyor', [], mem);
+  assert.ok(p.includes('ship it'), 'the index content is in the prompt');
+  assert.ok(p.includes('/h/.claude/projects/x/memory'), 'and the dir the files live in');
+  assert.ok(p.includes('WRITE'), 'the brain is told it may persist memory');
+  assert.ok(p.includes('şu iş'), 'natural references are taught, not hoped for');
+  const bare = buildPrompt(snap, 'selam', []);
+  assert.ok(!bare.includes('What you remember'), 'no memory, no empty memory block');
 });
 
 // ── brain context ────────────────────────────────────────────────────────────

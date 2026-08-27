@@ -32,8 +32,11 @@ second wake word and as the module's internal name — do not rename the files).
 `engine.js`, a **plain-node sidecar** spawned with `ELECTRON_RUN_AS_NODE=1` and
 `DYLD_LIBRARY_PATH` pointing at `sherpa-onnx-darwin-arm64` (VAD → speaker-verification gate →
 whisper STT, plus piper TTS) → `jarvis.js` in main (wake word, policy, actions) → `brain.js`
-(`claude -p --model haiku`, fed every bay's ANSI-stripped tail) → text typed into a bay's pty,
-reply spoken via `afplay`.
+(`claude -p --model opus --effort xhigh --dangerously-skip-permissions`, fed every bay's
+ANSI-stripped tail plus each project's `~/.claude/projects/<munged-cwd>/memory/MEMORY.md` index
+inline; it Reads/Greps the memory files behind them and may Write memory back on "not al") → text
+typed into a bay's pty, reply spoken via `afplay`. The wait is masked by a spoken ack, and a bare
+"dur" bypasses the brain entirely (instant Esc).
 
 Rules that are POLICY, not accident: the engine only ever answers "who spoke and what did they
 say" — whether to obey lives in `jarvis.js`; an un-enrolled jarvis obeys **nobody**; the
