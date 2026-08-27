@@ -55,11 +55,16 @@ try {
 }
 
 // ── models ───────────────────────────────────────────────────────────────────
+// The best whisper present wins: large-v3-turbo hears Turkish that small only guesses
+// at, and its 4-layer decoder keeps it fast enough to talk to. `npm run voice-models`
+// fetches turbo; a machine that only has small keeps working exactly as before.
+const WHISPER = ['turbo', 'medium', 'small'].find((n) =>
+  fs.existsSync(path.join(MODELS, 'whisper', `${n}-encoder.int8.onnx`))) || 'small';
 const P = {
   vad: path.join(MODELS, 'silero_vad.onnx'),
-  whisperEnc: path.join(MODELS, 'whisper', 'small-encoder.int8.onnx'),
-  whisperDec: path.join(MODELS, 'whisper', 'small-decoder.int8.onnx'),
-  whisperTok: path.join(MODELS, 'whisper', 'small-tokens.txt'),
+  whisperEnc: path.join(MODELS, 'whisper', `${WHISPER}-encoder.int8.onnx`),
+  whisperDec: path.join(MODELS, 'whisper', `${WHISPER}-decoder.int8.onnx`),
+  whisperTok: path.join(MODELS, 'whisper', `${WHISPER}-tokens.txt`),
   speaker: path.join(MODELS, '3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx'),
   ttsTr: path.join(MODELS, 'vits-piper-tr_TR-dfki-medium'),
   ttsEn: path.join(MODELS, 'vits-piper-en_US-amy-medium'),
@@ -75,21 +80,30 @@ for (const [k, p] of Object.entries(P)) {
 const makeVad = () => new sherpa.Vad({
   sileroVad: {
     model: P.vad,
-    threshold: 0.5,
-    minSpeechDuration: 0.25,
-    minSilenceDuration: 0.6,   // how long a pause ends an utterance — the feel of the thing
+    // 0.5/0.2 never even NOTICED a barked 0.4s "Dur!" (measured — no vad event at all).
+    // Looser ears are cheap: whatever slips through still has to pass the voiceprint
+    // gate and produce words before anything happens.
+    threshold: 0.35,
+    minSpeechDuration: 0.12,
+    // How long a pause ends an utterance — the feel of the thing. 0.6 CUT PEOPLE OFF:
+    // a Turkish sentence pauses to think mid-thought, and mira would grab the half and
+    // run with it. 1.1 waits out the thought without feeling deaf.
+    minSilenceDuration: 1.1,
     maxSpeechDuration: 18,
     windowSize: 512,
   },
   sampleRate: SR, numThreads: 1, provider: 'cpu', debug: 0,
 }, 120);
 
-const makeRecognizer = () => new sherpa.OfflineRecognizer({
+// language '' = whisper guesses per utterance — good for a CLI test, bad live: on short
+// noisy clips small/turbo alike will guess wrong and transcribe Turkish as gibberish
+// English. The owner speaks Turkish to her, so serve mode pins 'tr' (cfg can override).
+const makeRecognizer = (lang = '') => new sherpa.OfflineRecognizer({
   featConfig: { sampleRate: SR, featureDim: 80 },
   modelConfig: {
-    whisper: { encoder: P.whisperEnc, decoder: P.whisperDec, language: '', task: 'transcribe', tailPaddings: -1 },
+    whisper: { encoder: P.whisperEnc, decoder: P.whisperDec, language: lang, task: 'transcribe', tailPaddings: -1 },
     tokens: P.whisperTok,
-    numThreads: 2, provider: 'cpu', debug: 0,
+    numThreads: 4, provider: 'cpu', debug: 0,
   },
 });
 
@@ -151,7 +165,8 @@ let edgeVoices = { tr: 'tr-TR-EmelNeural', en: 'en-US-JennyNeural', enabled: tru
 async function synthBest(text, lang) {
   if (edgeVoices.enabled) {
     try {
-      const mp3 = await edgeTts.synth(text, lang === 'tr' ? edgeVoices.tr : edgeVoices.en);
+      const mp3 = await edgeTts.synth(text, lang === 'tr' ? edgeVoices.tr : edgeVoices.en,
+        { rate: edgeVoices.rate, pitch: edgeVoices.pitch });
       const f = path.join(os.tmpdir(), `hangar-jarvis-${process.pid}-${Date.now()}.mp3`);
       fs.writeFileSync(f, mp3);
       return { wav: f, secs: 0, via: 'edge' };   // afplay reads mp3; duration unknown and unneeded
@@ -171,8 +186,8 @@ async function synthBest(text, lang) {
 
   if (stt) {
     const w = sherpa.readWave(stt);
-    const text = transcribe(makeRecognizer(), w.samples, w.sampleRate);
-    console.log(JSON.stringify({ text }));
+    const text = transcribe(makeRecognizer(argOf('--lang') || ''), w.samples, w.sampleRate);
+    console.log(JSON.stringify({ text, model: WHISPER }));
   }
   if (embeds.length) {
     const ex = makeExtractor();
@@ -193,18 +208,31 @@ async function synthBest(text, lang) {
 })();
 
 // ── serve mode: the live pipeline ────────────────────────────────────────────
+const { stopKind } = require('./wake.js');
 const vad = makeVad();
-const recognizer = makeRecognizer();
 const extractor = makeExtractor();
 
 let profile = null;        // Float32Array[] — the enrolled voiceprints
 let threshold = 0.45;
 let enrollArmed = false;
 let vadWasOn = false;
+let sttLang = 'tr';
+let recognizer = null;     // built on first cfg, so a lang change can rebuild it
+const getRecognizer = () => (recognizer ||= makeRecognizer(sttLang));
+
+// whisper reads a bark better with room around it: a 0.4s "Dur!" straight from the VAD
+// decodes to NOTHING, the same clip inside half a second of silence decodes fine.
+function padShort(samples, secs) {
+  if (secs >= 1.0) return samples;
+  const lead = Math.round(0.3 * SR), tail = Math.round(0.5 * SR);
+  const out = new Float32Array(lead + samples.length + tail);
+  out.set(samples, lead);
+  return out;
+}
 
 function processSegment(samples) {
   const secs = samples.length / SR;
-  if (secs < 0.35) return;                       // a cough, a click
+  if (secs < 0.18) return;                       // a click
 
   if (enrollArmed) {
     if (secs < 1.0) { say({ t: 'log', m: `enroll: ${secs.toFixed(1)}s is too short, still armed` }); return; }
@@ -213,15 +241,33 @@ function processSegment(samples) {
     return;
   }
 
-  let score = null, ok = true;
+  let score = null;
   if (profile && profile.length) {
     const v = embed(extractor, samples);
     score = Math.max(...profile.map((p) => cosine(v, p)));
-    ok = score >= threshold;
   }
-  if (!ok) { say({ t: 'reject', score: +score.toFixed(3), secs: +secs.toFixed(1) }); return; }
+  const ok = score === null || score >= threshold;
 
-  const text = transcribe(recognizer, samples);
+  // A bare "dur!" is the one utterance that must NEVER be dropped — and it is exactly
+  // the one the pipeline used to drop: too short for the old 0.35s floor, and short
+  // clips make voiceprints noisy enough to fail the gate. So anything short or
+  // rejected gets one cheap second chance AS A STOP WORD ONLY, with a relaxed gate.
+  if (!ok || secs < 0.35) {
+    // …but never burn a whisper decode on a keyboard click: a voice that is not even
+    // CLOSE to the owner's is not a mangled "dur", it is noise.
+    const worthALook = score === null || score >= threshold - 0.12;
+    if (secs <= 1.4 && worthALook) {
+      const text = transcribe(getRecognizer(), padShort(samples, secs));
+      if (stopKind(text)) {
+        say({ t: 'utt', text, score: score === null ? null : +score.toFixed(3), ok: true, secs: +secs.toFixed(1) });
+        return;
+      }
+    }
+    if (!ok) say({ t: 'reject', score: +score.toFixed(3), secs: +secs.toFixed(1) });
+    return;
+  }
+
+  const text = transcribe(getRecognizer(), padShort(samples, secs));
   if (!text) return;
   say({ t: 'utt', text, score: score === null ? null : +score.toFixed(3), ok, secs: +secs.toFixed(1) });
 }
@@ -262,8 +308,10 @@ readline.createInterface({ input: process.stdin, terminal: false }).on('line', (
           ? msg.profile.map((v) => Float32Array.from(v)) : null;
         if (typeof msg.threshold === 'number') threshold = msg.threshold;
         if (msg.voices) edgeVoices = { ...edgeVoices, ...msg.voices };
+        if (typeof msg.sttLang === 'string' && msg.sttLang !== sttLang) { sttLang = msg.sttLang; recognizer = null; }
+        getRecognizer();   // load whisper NOW, not on the first thing the owner says
         log(`cfg: ${profile ? `${profile.length} voiceprint(s), threshold ${threshold}` : 'no voiceprint — gate open'}`
-          + ` · voice: ${edgeVoices.enabled ? edgeVoices.tr + ' (edge)' : 'piper only'}`);
+          + ` · stt: whisper-${WHISPER}/${sttLang || 'auto'} · voice: ${edgeVoices.enabled ? edgeVoices.tr + ' (edge)' : 'piper only'}`);
         break;
       case 'enroll': enrollArmed = true; break;
       case 'enroll-cancel': enrollArmed = false; break;

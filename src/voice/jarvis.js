@@ -15,7 +15,7 @@ const { execFile, spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
-const { matchWake, guessLang } = require('./wake.js');
+const { matchWake, guessLang, stopKind } = require('./wake.js');
 const brain = require('./brain.js');
 const { BAYS_PER_PAGE } = require('../state.js');
 
@@ -89,10 +89,18 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
     ack: true,             // speak "bakıyorum" the moment a command lands, then think
     brainTimeout: 240_000,
     threshold: null,       // null → the value enrollment measured, or the engine's default
+    sttLang: 'tr',         // the owner speaks Turkish to her; '' lets whisper guess per utterance
     ...saved,
-    // Her voice: Edge's neural Emel/Jenny when the network is there (realistic), piper's
-    // dfki/amy offline. All four are women's voices — that was the spec, verbatim.
-    voices: { enabled: true, tr: 'tr-TR-EmelNeural', en: 'en-US-JennyNeural', ...(saved.voices || {}) },
+    // Her voice: ONE voice for both languages — Edge's Ava (multilingual: natural in
+    // Turkish AND English, warm where Emel was flat), piper's dfki/amy offline fallback.
+    // All are women's voices — that was the spec, verbatim. rate/pitch shade the tone;
+    // voice.json can pin any of it, e.g. {"voices":{"tr":"tr-TR-EmelNeural","rate":"+0%"}}.
+    voices: {
+      enabled: true,
+      tr: 'en-US-AvaMultilingualNeural', en: 'en-US-AvaMultilingualNeural',
+      rate: '-5%', pitch: '-2Hz',
+      ...(saved.voices || {}),
+    },
   };
   let profile = readJson(profileFile);   // { v: [[..]x3], threshold } | null
 
@@ -180,6 +188,7 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
       profile: profile?.v || null,
       threshold: cfg.threshold ?? profile?.threshold ?? 0.45,
       voices: cfg.voices,
+      sttLang: cfg.sttLang,
     });
   }
 
@@ -224,13 +233,16 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
       return;
     }
 
-    if (player) { try { player.kill(); } catch { /* done */ } }   // you talk, jarvis stops
+    const wasSpeaking = !!player || phase === 'speaking';
+    if (player) { try { player.kill(); } catch { /* done */ } }   // you talk, mira stops
 
     const wake = matchWake(text, cfg.wake);
     const inWindow = Date.now() < followUpUntil;
     let command = null;
     if (wake) command = wake.command;
     else if (inWindow || pttArmed) command = text.trim();
+    // A stop needs no wake word while she is busy — being stoppable is the point.
+    else if ((wasSpeaking || busyThinking) && stopKind(text)) command = text.trim();
     pttArmed = false;
 
     if (command === null) { event({ t: 'heard', text, acted: false }); return; }
@@ -244,7 +256,7 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
 
     // "Dur" must not wait 40 seconds for opus to agree. A bare stop word goes straight
     // to Esc — the focused bay if there is one, else every running bay on this page.
-    if (quickStop(command)) return;
+    if (quickStop(command, wasSpeaking)) return;
 
     setPhase('thinking');
     if (cfg.ack) {
@@ -254,9 +266,12 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
       speak(acks[Math.floor(Math.random() * acks.length)], tr ? 'tr' : 'en');
     }
     const reply = await think(command);
+    const muted = muteReply; muteReply = false;   // "sus" while she thought → text only
     if (!reply) {
-      speak(guessLang(command) === 'tr' ? 'Buna bir cevap üretemedim, tekrar sorar mısın?'
-                                        : "I couldn't come up with an answer to that, ask me again?", guessLang(command));
+      if (!muted) {
+        speak(guessLang(command) === 'tr' ? 'Buna bir cevap üretemedim, tekrar sorar mısın?'
+                                          : "I couldn't come up with an answer to that, ask me again?", guessLang(command));
+      }
       return;
     }
     for (const a of reply.actions) act(a);
@@ -265,16 +280,27 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
     history.push({ heard: command, said: reply.say });
     history = history.slice(-HISTORY_KEPT);
     followUpUntil = Date.now() + FOLLOW_UP_MS;
-    speak(reply.say, reply.lang || guessLang(reply.say));
+    if (!muted) speak(reply.say, reply.lang || guessLang(reply.say));
   }
 
-  // "Dur" as the whole command (with maybe one word after it) skips the brain entirely.
-  // "sus" only silences her — the barge-in already killed the player by the time we're here.
-  function quickStop(command) {
-    const words = command.toLowerCase().split(/\s+/).map((w) => w.replace(/[^\p{L}]/gu, '')).filter(Boolean);
-    if (!words.length || words.length > 2) return false;
-    if (!['dur', 'durun', 'stop', 'iptal', 'sus'].includes(words[0])) return false;
-    if (words[0] === 'sus') { setPhase('listening'); return true; }
+  // Stops skip the brain entirely: "dur" must not wait 40 seconds for opus to agree.
+  // What a stop does depends on what she was doing. Any stop while she is TALKING means
+  // "be quiet" — the barge-in already killed the player, don't take it out on the
+  // agents. "dur" into silence → Esc to the agents. "kapat" → the mic itself goes off.
+  function quickStop(command, wasSpeaking) {
+    const kind = stopKind(command);
+    if (!kind) return false;
+    if (kind === 'off') {
+      event({ t: 'say', text: 'Kapattım. Orb ile geri açarsın.', actions: 0, bays: [] });
+      api.setEnabled(false);
+      return true;
+    }
+    if (kind === 'hush' || wasSpeaking) {
+      if (busyThinking) muteReply = true;   // the pending answer arrives as text, not voice
+      followUpUntil = 0;
+      setPhase(busyThinking ? 'thinking' : 'listening');
+      return true;
+    }
     const targets = [];
     if (view.focused && bays.get(view.focused) && !bays.get(view.focused).exited) {
       targets.push(view.focused);
@@ -291,6 +317,7 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
   }
 
   let busyThinking = false;
+  let muteReply = false;
   async function think(command) {
     const bin = await findClaude();
     if (!bin) return null;
@@ -462,7 +489,8 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
   }
 
   // ── surface for main.js ────────────────────────────────────────────────────
-  return {
+  // (named so quickStop's "kapat" can flip the same switch the orb does)
+  const api = {
     status: snapshotForRenderer,
     setEnabled(on) {
       enabled = !!on;
@@ -478,6 +506,7 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
     act,   // exposed for main's HANGAR_VOICE_DEMO test hook — same code path the brain drives
     shutdown() { try { engine?.kill(); } catch { /* going down anyway */ } engine = null; },
   };
+  return api;
 }
 
 function readJson(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } }

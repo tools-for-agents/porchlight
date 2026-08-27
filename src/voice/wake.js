@@ -82,6 +82,33 @@ function originalAfterToken(original, i) {
   return '';
 }
 
+// The stop lexicon, in ONE place for both sides of the pipe: jarvis decides what a stop
+// DOES, and the engine must never DROP one — short clips make noisy voiceprints, so the
+// gate is most likely to reject exactly the clip where the user barked "dur!".
+// Two words max: "dur bakalım" is a stop, "dur sana şunu anlatayım" is a sentence.
+// 'tamam'/'yeter' count only alone — "tamam yap" is a confirmation, not a stop.
+const STOPS = {
+  halt: ['dur', 'durun', 'stop', 'iptal', 'bekle'],   // Esc to the agents
+  hush: ['sus', 'sustur', 'kes', 'tamam', 'yeter'],   // just stop talking
+  off: ['kapat', 'kapan'],                            // the mic goes off entirely
+};
+const SOLO_ONLY = new Set(['tamam', 'yeter']);
+function stopKind(text) {
+  const words = fold(text).replace(/[^\p{L}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+  if (!words.length || words.length > 2) return null;
+  if (SOLO_ONLY.has(words[0]) && words.length > 1) return null;
+  for (const [kind, list] of Object.entries(STOPS)) {
+    if (list.includes(words[0])) return kind;
+    // whisper mangles a barked word — a real "Dur." has come back "duş". A single word
+    // one edit from a stop word, starting with the same letter, still stops — but only
+    // when it is the WHOLE utterance (same fuzz-is-earned rule as the wake word).
+    if (words.length === 1 && words[0].length >= 3) {
+      for (const s of list) if (s[0] === words[0][0] && levenshtein(words[0], s) === 1) return kind;
+    }
+  }
+  return null;
+}
+
 // A cheap "which language is this" for picking the TTS voice when the brain forgot to
 // say. Turkish-specific letters or a couple of very common Turkish words → tr.
 function guessLang(text) {
@@ -91,4 +118,4 @@ function guessLang(text) {
   return 'en';
 }
 
-module.exports = { matchWake, fold, levenshtein, guessLang };
+module.exports = { matchWake, fold, levenshtein, guessLang, stopKind };

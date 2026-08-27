@@ -46,6 +46,20 @@ if [ ! -e "whisper/small-encoder.int8.onnx" ]; then
 fi
 echo "✓ whisper small (int8)"
 
+# 2b. Whisper large-v3-turbo — the ears that actually understand Turkish. small guesses
+#     at it; turbo's large-v3 encoder hears it, and the 4-layer decoder keeps it fast
+#     enough to talk to. ~560MB down; the engine prefers turbo when it is present.
+if [ ! -e "whisper/turbo-encoder.int8.onnx" ]; then
+  get "$BASE/asr-models/sherpa-onnx-whisper-turbo.tar.bz2" "whisper/turbo-encoder.int8.onnx"
+  tar xjf sherpa-onnx-whisper-turbo.tar.bz2
+  mkdir -p whisper
+  mv sherpa-onnx-whisper-turbo/turbo-encoder.int8.onnx whisper/
+  mv sherpa-onnx-whisper-turbo/turbo-decoder.int8.onnx whisper/
+  mv sherpa-onnx-whisper-turbo/turbo-tokens.txt whisper/
+  rm -rf sherpa-onnx-whisper-turbo sherpa-onnx-whisper-turbo.tar.bz2
+fi
+echo "✓ whisper large-v3-turbo (int8)"
+
 # 3. Speaker embedding — trained on Chinese speakers, works on anyone: a voiceprint is a
 #    voice, not a vocabulary. This is the model that makes "only my voice" true.
 get "$BASE/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx" \

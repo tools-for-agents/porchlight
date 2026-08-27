@@ -8,7 +8,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 
-const { matchWake, guessLang } = require('../src/voice/wake.js');
+const { matchWake, guessLang, stopKind } = require('../src/voice/wake.js');
 const { stripAnsi, tail } = require('../src/voice/ansi.js');
 const { parseReply, buildContext, buildPrompt, memoryDirFor } = require('../src/voice/brain.js');
 const { parseBayId, chooseSlot, inferProjectsDir } = require('../src/voice/jarvis.js');
@@ -53,6 +53,26 @@ test('mira: near-words with a different first letter can never summon her', () =
   assert.equal(matchWake('bira alalım mı bugün', WAKES), null);       // 1 edit away, wrong start
   assert.equal(matchWake('mimar bey geldi az önce', WAKES), null);    // right start, 2 edits, short name allows 1
   assert.equal(matchWake('bay üç mira kelimesini yazdı', WAKES), null); // about her, not to her
+});
+
+test('stopKind: halts, hushes and offs — and sentences that merely contain them do not', () => {
+  assert.equal(stopKind('Dur!'), 'halt');
+  assert.equal(stopKind('dur bakalım'), 'halt');
+  assert.equal(stopKind('Stop.'), 'halt');
+  assert.equal(stopKind('Sus'), 'hush');
+  assert.equal(stopKind('kes şunu'), 'hush');
+  assert.equal(stopKind('Tamam.'), 'hush');
+  assert.equal(stopKind('Kapat'), 'off');
+  assert.equal(stopKind('tamam yap'), null, 'a confirmation is not a stop');
+  assert.equal(stopKind('dur sana bir şey diyeceğim'), null, 'a sentence is not a stop');
+  assert.equal(stopKind('durum nedir'), null);
+  assert.equal(stopKind(''), null);
+  // whisper-small really transcribed a barked "Dur." as "duş" — one edit, same first
+  // letter, alone in the utterance: still a stop. Different first letter never is.
+  assert.equal(stopKind('duş'), 'halt');
+  assert.equal(stopKind('kapa'), 'off');
+  assert.equal(stopKind('bur'), null, 'a start-letter miss is a hard no');
+  assert.equal(stopKind('duş alacağım'), null, 'fuzz is for the bare bark only');
 });
 
 test('guessLang: Turkish by letters or stopwords, English otherwise', () => {

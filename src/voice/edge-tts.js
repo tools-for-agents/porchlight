@@ -32,10 +32,18 @@ function gecToken() {
 const escapeXml = (s) => String(s).replace(/[<>&'"]/g, (c) =>
   ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
 
+// Prosody values travel from voice.json into SSML — accept only the shapes the
+// service understands ("-5%", "+3Hz") so a typo degrades to neutral, not to XML.
+const prosodyOk = (v, unit) => (typeof v === 'string' && new RegExp(`^[+-]?\\d+${unit}$`).test(v) ? v : null);
+
 /**
+ * @param {{rate?:string, pitch?:string, timeoutMs?:number}} [opts]
  * @returns {Promise<Buffer>} mp3 bytes (audio-24khz-48kbitrate-mono-mp3)
  */
-function synth(text, voice, timeoutMs = 12_000) {
+function synth(text, voice, opts = {}) {
+  const timeoutMs = opts.timeoutMs || 12_000;
+  const rate = prosodyOk(opts.rate, '%') || '+0%';
+  const pitch = prosodyOk(opts.pitch, 'Hz') || '+0Hz';
   return new Promise((resolve, reject) => {
     let WebSocket;
     try { WebSocket = require('ws'); } catch (e) { return reject(new Error(`ws not installed: ${e.message}`)); }
@@ -72,7 +80,7 @@ function synth(text, voice, timeoutMs = 12_000) {
             outputFormat: 'audio-24khz-48kbitrate-mono-mp3',
           } } } }));
       const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>`
-        + `<voice name='${voice}'><prosody pitch='+0Hz' rate='+0%' volume='+0%'>${escapeXml(text)}</prosody></voice></speak>`;
+        + `<voice name='${voice}'><prosody pitch='${pitch}' rate='${rate}' volume='+0%'>${escapeXml(text)}</prosody></voice></speak>`;
       ws.send(`X-RequestId:${reqId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${stamp}\r\nPath:ssml\r\n\r\n${ssml}`);
     });
     ws.on('message', (data, isBinary) => {
