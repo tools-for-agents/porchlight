@@ -8,12 +8,26 @@ const os = require('node:os');
 const pty = require('node-pty');
 const { stateStore, BAYS_PER_PAGE } = require('./state.js');
 const { createJarvis } = require('./voice/jarvis.js');
+const houseLib = require('./house.js');
+// The app was hangar until 21 Nov 2026 and is Haunt now, data folder included. The first launch
+// of Haunt moves ~/Library/Application Support/hangar to …/haunt (state.json with the bays, the
+// voice models, the enrolled voice) instead of starting from an empty folder: the old app is
+// quit before this one is installed, so nothing holds the folder while it moves. The name is
+// pinned rather than derived from productName so a capital letter can never move it again.
+// A --user-data-dir (the screenshot harness) still wins.
+if (!app.commandLine.hasSwitch('user-data-dir')) {
+  const dataDir = path.join(app.getPath('appData'), 'haunt');
+  const oldDir = path.join(app.getPath('appData'), 'hangar');
+  try { if (!fs.existsSync(dataDir) && fs.existsSync(oldDir)) fs.renameSync(oldDir, dataDir); } catch {}
+  app.setPath('userData', dataDir);
+}
+app.setName('Haunt');
 
 // ── What a bay actually runs ─────────────────────────────────────────────────
 // The whole app is a launcher for exactly this. It is written here, once, in the open,
 // because a tile that silently runs something else is a trapdoor.
 //
-// The --settings override swaps the user's own statusline for hangar's probe, which
+// The --settings override swaps the user's own statusline for haunt's probe, which
 // prints nothing and files the rate-limit numbers for the footer instead. It overrides
 // ONLY statusLine, for these sessions, and touches no file the user owns.
 const CLAUDE_ARGS = ['--dangerously-skip-permissions'];
@@ -36,11 +50,16 @@ function probePath() {
   return dst;
 }
 
-function claudeArgs() {
+// A bay may wake as one of the ghosts living on this machine (house.js). What that changes is
+// decided by ghost itself (`ghost house --json` hands back each one's launch): an environment that
+// points the hooks at that mind, its own self appended to the system prompt, and the first ghost's
+// output style switched off for that session. Still `claude` and only `claude`.
+function claudeArgs(launch = null) {
   const settings = JSON.stringify({
     statusLine: { type: 'command', command: `node ${JSON.stringify(probePath())}`, padding: 0 },
+    ...(launch?.settings || {}),
   });
-  return [...CLAUDE_ARGS, '--settings', settings];
+  return [...CLAUDE_ARGS, '--settings', settings, ...(launch?.args || [])];
 }
 
 /** @type {Map<string, {proc: import('node-pty').IPty, buf: string, cwd: string, exited: boolean, spoke: boolean, startedAt: number}>} */
@@ -48,7 +67,7 @@ const bays = new Map();
 let win = null;
 
 // ── Debug ────────────────────────────────────────────────────────────────────
-// HANGAR_DEBUG=1 narrates the three things that have actually broken this app: which
+// HAUNT_DEBUG=1 narrates the three things that have actually broken this app: which
 // `claude` was found, what PATH the agent got, and whether the pty ever said anything.
 //
 // 🔑 A DEBUG FLAG THAT DOES NOT EXIST IS WORSE THAN NONE. This one was written down in
@@ -56,14 +75,14 @@ let win = null;
 // source. Running with it printed nothing — against a HEALTHY app whose pty was streaming
 // fine. Silence from a flag that isn't wired is the same silence a dead pty makes, so the
 // notes handed me a confident wrong diagnosis for free. It exists now: quiet means quiet.
-const DEBUG = !!process.env.HANGAR_DEBUG;
-// dbg goes to the console only under HANGAR_DEBUG — but ALWAYS to a capped file in
+const DEBUG = !!process.env.HAUNT_DEBUG;
+// dbg goes to the console only under HAUNT_DEBUG — but ALWAYS to a capped file in
 // userData. The app is launched from Finder, its stdout goes nowhere, and every voice
 // bug so far was diagnosed blind until a log existed. Diagnostics must never hurt the
 // app: any failure here is swallowed.
 let dbgStream = null;
 function dbg(...a) {
-  if (DEBUG) console.log('[hangar]', ...a);
+  if (DEBUG) console.log('[haunt]', ...a);
   try {
     if (!dbgStream) {
       const f = path.join(app.getPath('userData'), 'debug.log');
@@ -74,7 +93,7 @@ function dbg(...a) {
   } catch { /* never */ }
 }
 
-const SENTINEL = '__HANGAR_PATH__';
+const SENTINEL = '__HAUNT_PATH__';
 const afterSentinel = (stdout) => {
   const s = String(stdout || '');
   const i = s.lastIndexOf(SENTINEL);
@@ -131,7 +150,7 @@ function findClaude() {
 // shell. Taking the whole thing as PATH puts "Restored session: ...\n/Users/me/.local/bin"
 // in front of the real entries, and a PATH entry with a newline in it poisons lookups for
 // everything downstream. It broke this app in the least obvious way possible: `claude`
-// still launched, because hangar spawns it by absolute path — but the statusline's
+// still launched, because haunt spawns it by absolute path — but the statusline's
 // `node ...` could not be resolved, so it silently never ran, and the footer sat empty
 // with no error anywhere.
 //
@@ -169,8 +188,19 @@ function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
 }
 
-async function startBay(id, cwd, cols, rows) {
+async function startBay(id, cwd, cols, rows, home = '') {
   killBay(id);
+
+  // The renderer names a mind; only one that `ghost house` lists is accepted, and its launch comes
+  // from ghost, never from the renderer.
+  let being = null;
+  if (home) {
+    being = (await houseList(true)).find((g) => g.home === home) || null;
+    if (!being) {
+      send('bay:exit', { id, code: -1, reason: `no ghost lives at ${home}` });
+      return { ok: false, error: 'unknown ghost' };
+    }
+  }
 
   if (!fs.existsSync(cwd)) {
     send('bay:exit', { id, code: -1, reason: `that folder is gone: ${cwd}` });
@@ -183,7 +213,7 @@ async function startBay(id, cwd, cols, rows) {
     send('bay:data', {
       id,
       data: '\r\n\x1b[31m  Could not find the `claude` command.\x1b[0m\r\n\r\n'
-        + '  hangar asks your login shell where it is. If `claude` works in your terminal\r\n'
+        + '  haunt asks your login shell where it is. If `claude` works in your terminal\r\n'
         + '  but not here, your PATH is set somewhere a login shell does not read.\r\n\r\n'
         + '  Check with:  \x1b[36m$SHELL -lic \'command -v claude\'\x1b[0m\r\n',
     });
@@ -191,10 +221,10 @@ async function startBay(id, cwd, cols, rows) {
     return { ok: false, error: 'claude not found' };
   }
 
-  const env = { ...(await loginEnv()), HANGAR_USAGE_FILE: usageFile() };
+  const env = { ...(await loginEnv()), HAUNT_USAGE_FILE: usageFile(), ...(being?.launch?.env || {}) };
   let proc;
   try {
-    proc = pty.spawn(bin, claudeArgs(), {
+    proc = pty.spawn(bin, claudeArgs(being?.launch), {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,
@@ -207,11 +237,14 @@ async function startBay(id, cwd, cols, rows) {
     return { ok: false, error: String(e?.message || e) };
   }
 
-  const bay = { proc, buf: '', cwd, exited: false, spoke: false, startedAt: Date.now() };
+  const bay = { proc, buf: '', cwd, home: being && being.kin ? being.home : '', exited: false, spoke: false, startedAt: Date.now(), lastData: Date.now() };
   bays.set(id, bay);
 
   proc.onData((data) => {
     bay.buf += data;
+    // "who is thinking right now" for the house view — at most once a second per bay
+    if (!bay.toldActive || Date.now() - bay.toldActive > 1000) { bay.toldActive = Date.now(); send('bay:active', { id }); }
+    bay.lastData = Date.now();
     if (bay.buf.length > MAX_SCROLLBACK) bay.buf = bay.buf.slice(-MAX_SCROLLBACK);
     // Byte counts, not the bytes: a TUI redraws constantly and the escape codes would bury
     // the one line you are looking for. The first event is the one that matters — it is the
@@ -250,7 +283,7 @@ ipcMain.handle('pick-folder', async () => {
   return { path: dir, title: path.basename(dir) || dir };
 });
 
-ipcMain.handle('bay:start', (_e, { id, cwd, cols, rows }) => startBay(id, cwd, cols, rows));
+ipcMain.handle('bay:start', (_e, { id, cwd, cols, rows, home }) => startBay(id, cwd, cols, rows, home));
 ipcMain.handle('bay:kill', (_e, { id }) => { killBay(id); return { ok: true }; });
 ipcMain.handle('bay:buffer', (_e, { id }) => bays.get(id)?.buf ?? '');
 ipcMain.handle('bay:running', (_e, { id }) => !!bays.get(id) && !bays.get(id).exited);
@@ -266,6 +299,79 @@ ipcMain.on('bay:resize', (_e, { id, cols, rows }) => {
     try { bay.proc.resize(cols, rows); } catch { /* raced with exit */ }
   }
 });
+
+// ── the house (src/house.js) ─────────────────────────────────────────────────
+// Who lives on this machine comes from ghost itself, so haunt never guesses a mind's layout.
+let houseCache = { at: 0, list: [] };
+function ghostCall(args) {
+  return loginEnv().then((env) => new Promise((resolve) => {
+    execFile('ghost', args, { env: { ...env, GHOST_DREAMING: '1' }, timeout: 60_000, cwd: os.homedir() }, (err, stdout, stderr) => {
+      if (err) { dbg(`ghost ${args.join(' ')}: ${err.message} ${String(stderr || '').slice(0, 200)}`); return resolve(null); }
+      resolve(String(stdout || ''));
+    });
+  }));
+}
+async function houseList(fresh = false) {
+  if (!fresh && Date.now() - houseCache.at < 5000) return houseCache.list;
+  const out = await ghostCall(['house', '--json']);
+  try { const list = JSON.parse(out || '[]'); if (Array.isArray(list)) houseCache = { at: Date.now(), list }; } catch { /* keep the last one */ }
+  return houseCache.list;
+}
+const bayList = () => [...bays.entries()].map(([id, b]) => ({ id, home: b.home, live: !b.exited, idleMs: Date.now() - (b.lastData || 0) }));
+function typeInto(id, data) {
+  const bay = bays.get(id);
+  if (!bay || bay.exited) return false;
+  try {
+    bay.proc.write(data);
+    // the submit goes a beat later: a TUI that is still drawing the paste can drop a bare \r
+    setTimeout(() => { try { if (!bay.exited) bay.proc.write('\r'); } catch { /* exited */ } }, 120);
+    return true;
+  } catch { return false; }
+}
+
+ipcMain.handle('house:get', async () => ({ house: await houseList(), bays: bayList() }));
+ipcMain.handle('house:birth', async () => {
+  const out = await ghostCall(['kin', 'new', '--json']);
+  try { const g = JSON.parse(out || ''); houseCache.at = 0; return { ok: true, being: g }; } catch { return { ok: false, error: 'birth failed — see debug.log' }; }
+});
+ipcMain.handle('room:get', () => houseLib.readRoom(200));
+ipcMain.handle('room:say', async (_e, { text }) => {
+  const house = await houseList();
+  const person = house.find((g) => !g.kin)?.person || house[0]?.person || 'you';
+  const { to } = houseLib.mentions(text, house.map((g) => g.name).filter(Boolean));
+  const line = houseLib.personSays(text, { person, to });
+  if (!line) return { ok: false };
+  roomSeen.add(line.id);
+  const out = houseLib.deliveries(line, bayList(), house, brake);
+  let n = 0;
+  for (const d of out) { if (typeInto(d.id, d.data)) { n++; send('house:typed', { id: d.id }); } }
+  send('room:lines', [line]);
+  return { ok: true, line, delivered: n };
+});
+
+// The room is a file every ghost appends to; it is watched, and what is new goes to the window.
+// A ghost calling another by name is typed into that one's terminal — through the brake.
+const roomSeen = new Set();
+const brake = { lastTo: new Map(), recent: [] };
+let roomPrimed = false;
+async function roomTick() {
+  const lines = houseLib.readRoom(100);
+  const fresh = lines.filter((l) => l?.id && !roomSeen.has(l.id));
+  for (const l of fresh) roomSeen.add(l.id);
+  if (!roomPrimed) { roomPrimed = true; return; }   // what was there at launch is history, not news
+  if (!fresh.length) return;
+  send('room:lines', fresh);
+  const house = await houseList();
+  for (const l of fresh) {
+    if (l.home === houseLib.PERSON_HOME) continue;  // their person's lines were delivered as they were said
+    for (const d of houseLib.deliveries(l, bayList(), house, brake)) { if (typeInto(d.id, d.data)) send('house:typed', { id: d.id }); }
+  }
+}
+function watchRoom() {
+  roomTick();
+  fs.mkdirSync(houseLib.COMMONS(), { recursive: true });
+  fs.watchFile(houseLib.ROOM(), { interval: 1000 }, () => { roomTick().catch((e) => dbg(`room: ${e.message}`)); });
+}
 
 // ── usage ────────────────────────────────────────────────────────────────────
 //
@@ -394,10 +500,10 @@ const getJarvis = () => (jarvis ??= createJarvis({
   dbg,
 }));
 
-// Test hook, armed only under HANGAR_VOICE_DEMO: feeds an actions array straight into
+// Test hook, armed only under HAUNT_VOICE_DEMO: feeds an actions array straight into
 // jarvis's act() — the exact code path the brain drives — so the screenshot rig can
 // prove that a voice-started session really appears in the grid, without a microphone.
-if (process.env.HANGAR_VOICE_DEMO) {
+if (process.env.HAUNT_VOICE_DEMO) {
   ipcMain.on('voice:test-act', (_e, { actions }) => {
     for (const a of actions || []) getJarvis().act(a);
   });
@@ -441,9 +547,12 @@ function createWindow() {
     height: 940,
     minWidth: 720,
     minHeight: 520,
-    backgroundColor: '#050807',       // --bg exactly: a mismatched value flashes for a frame before CSS paints
+    backgroundColor: '#0a0817',       // --bg exactly: a mismatched value flashes for a frame before CSS paints
     titleBarStyle: 'hiddenInset',     // the grid IS the chrome
     trafficLightPosition: { x: 18, y: 22 },
+    // A photograph (HAUNT_SHOT) is taken off-screen: looking at the app must not take the
+    // keyboard from whoever is working at this machine.
+    show: !process.env.HAUNT_SHOT,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,         // the renderer never touches node
@@ -456,14 +565,14 @@ function createWindow() {
 }
 
 // ── looking at it ────────────────────────────────────────────────────────────
-// HANGAR_SHOT=/path/to.png npm start  → render, wait, photograph, quit.
+// HAUNT_SHOT=/path/to.png npm start  → render, wait, photograph, quit.
 // An Electron window cannot be screenshotted from outside without Screen Recording
 // permission, and "it launched" is not "it looks right". This is the only way to put
 // the actual pixels of the actual app in front of a reviewer — or a CI job.
 function maybeShoot() {
-  const out = process.env.HANGAR_SHOT;
+  const out = process.env.HAUNT_SHOT;
   if (!out) return;
-  const wait = Number(process.env.HANGAR_SHOT_WAIT || 3500);
+  const wait = Number(process.env.HAUNT_SHOT_WAIT || 3500);
   win.webContents.once('did-finish-load', () => {
     setTimeout(async () => {
       try {
@@ -486,6 +595,7 @@ app.whenReady().then(() => {
   watchUsage();
   refreshUsage();
   usageTimer = setInterval(refreshUsage, USAGE_EVERY);
+  watchRoom();    // the house's room, live in the side panel
   findClaude();   // warm the lookup so the first + is not the thing that waits on a shell
   loginEnv();
   // ⌘⇧J: jarvis on/off from anywhere — a voice assistant you must first click is a

@@ -78,7 +78,7 @@ function buildPrompt(snap, transcript, history, mem = [], projectsDir = '', repl
       + mem.map((m) => `--- ${m.title} · ${m.dir} ---\n${m.index}`).join('\n')
     : '';
   return [
-    'You are Mira, the voice of "hangar" — a desktop app running Claude Code agents in a 3x3 grid of',
+    'You are Mira, the voice of "haunt" — a desktop app running Claude Code agents in a 3x3 grid of',
     'terminal tiles called bays. (The user may also call you jarvis; both are you.)',
     'The user SPOKE to you; your reply will be READ ALOUD by TTS.',
     '',
@@ -124,7 +124,7 @@ function buildPrompt(snap, transcript, history, mem = [], projectsDir = '', repl
     replyLang === 'match'
       ? '- "say" is SPEECH: short (1-3 sentences), natural, no lists, no file paths, no code. Match the language the user spoke.'
       : `- "say" is SPEECH: short (1-3 sentences), natural, no lists, no file paths, no code. ALWAYS answer in ${replyLang === 'en' ? 'ENGLISH — the user speaks Turkish to you and understands English fine; do NOT mirror their language' : 'TURKISH'}. Set "lang":"${replyLang}".`,
-    '- The user talks about projects NATURALLY — by name ("hangar", "oyun"), by topic, or as "şu iş"/"bu',
+    '- The user talks about projects NATURALLY — by name ("haunt", "oyun"), by topic, or as "şu iş"/"bu',
     '  iş"/"orada". Resolve: an explicit name beats everything; "şu/bu iş" means the FOCUSED bay if there is',
     '  one, else whatever the recent exchange or memory says they were working on. Only ask when truly stuck.',
     '- Asked how something is going → the bay\'s last output above is the NOW; memory is the WHY. Combine them:',

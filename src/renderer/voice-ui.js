@@ -3,7 +3,7 @@
 /* mira's face. Three surfaces, one truth:
  *
  *   the ORB in the footer   — a canvas ring that draws the REAL microphone signal
- *                             (window.hangarMic.level, not a looping gif of one):
+ *                             (window.hauntMic.level, not a looping gif of one):
  *                             breathing green at rest, a circular equalizer while she
  *                             hears you, an amber comet while the brain runs, expanding
  *                             rings while she speaks, one red flare for a stranger.
@@ -13,7 +13,7 @@
  *
  * This file renders STATE; it decides nothing. Every colour is an event main sent.
  * Click toggles the ears, right-click arms one wake-word-free utterance.
- * HANGAR_VOICE_DEMO=hearing|thinking|speaking|enroll poses it for the screenshot rig. */
+ * HAUNT_VOICE_DEMO=hearing|thinking|speaking|enroll poses it for the screenshot rig. */
 
 (() => {
   const $ = (s, r = document) => r.querySelector(s);
@@ -65,7 +65,7 @@
   function drawOrb(ctx, s, t) {
     ctx.clearRect(0, 0, s, s);
     const c = s / 2, r = c - 4;
-    const lvl = phase === 'speaking' ? demoLevel : (window.hangarMic.live ? window.hangarMic.level : 0);
+    const lvl = phase === 'speaking' ? demoLevel : (window.hauntMic.live ? window.hauntMic.level : 0);
     ctx.lineCap = 'round';
 
     const ring = (radius, color, alpha, width = 1.5, glow = 0) => {
@@ -158,7 +158,7 @@
       lastSample = now;
       hist[hi = (hi + 1) % BARS] = demoMode
         ? 0.15 + 0.65 * Math.abs(Math.sin(t * 5.1 + hi * 0.9))   // posed for the camera
-        : (window.hangarMic.live ? window.hangarMic.level : 0);
+        : (window.hauntMic.live ? window.hauntMic.level : 0);
     }
     // her "voice level" while speaking: smoothed wander, since afplay's samples are not ours
     demoLevel += ((0.35 + 0.3 * Math.sin(t * 7.3) + 0.25 * Math.sin(t * 13.7)) - demoLevel) * 0.2;
@@ -208,30 +208,30 @@
   async function applyStatus(st) {
     enrolled = !!st.enrolled;
     phase = st.phase || (st.enabled ? 'listening' : 'off');
-    if (st.enabled && !window.hangarMic.live) {
-      const ok = await window.hangarMic.start();
+    if (st.enabled && !window.hauntMic.live) {
+      const ok = await window.hauntMic.start();
       if (!ok) {
         showToast('microphone unavailable — check System Settings → Privacy → Microphone');
-        window.hangar.voice.toggle();   // roll the switch back rather than pretend to listen
+        window.haunt.voice.toggle();   // roll the switch back rather than pretend to listen
         return;
       }
     }
-    if (!st.enabled && window.hangarMic.live) window.hangarMic.stop();
+    if (!st.enabled && window.hauntMic.live) window.hauntMic.stop();
     paintChrome();
   }
 
-  orb.addEventListener('click', async () => applyStatus(await window.hangar.voice.toggle()));
-  orb.addEventListener('contextmenu', (e) => { e.preventDefault(); window.hangar.voice.ptt(); });
+  orb.addEventListener('click', async () => applyStatus(await window.haunt.voice.toggle()));
+  orb.addEventListener('contextmenu', (e) => { e.preventDefault(); window.haunt.voice.ptt(); });
 
   // ── enrollment: three sentences → a voiceprint ────────────────────────────
   async function openEnroll() {
     if (dlg.open) return;
     // Enrollment needs ears: if mira is off, this click is also the on-switch.
-    if (!window.hangarMic.live) {
-      const st = await window.hangar.voice.toggle();
+    if (!window.hauntMic.live) {
+      const st = await window.haunt.voice.toggle();
       if (!st.enabled) return;   // no mic permission / no models — the toast already said so
       await applyStatus(st);
-      if (!window.hangarMic.live) return;
+      if (!window.hauntMic.live) return;
     }
     steps.forEach((p, i) => p.classList.toggle('current', i === 0));
     steps.forEach((p) => p.classList.remove('done'));
@@ -239,14 +239,14 @@
     cap.disabled = false;
     cap.textContent = 'record line 1';
     dlg.showModal();
-    window.hangar.voice.enrollStart();
+    window.haunt.voice.enrollStart();
   }
   $('#enroll .capture').addEventListener('click', () => {
     $('#enroll .capture').disabled = true;
     $('#enroll .capture').textContent = 'listening — read the highlighted line…';
-    window.hangar.voice.enrollCapture();
+    window.haunt.voice.enrollCapture();
   });
-  $('#enroll .cancel').addEventListener('click', () => { window.hangar.voice.enrollCancel(); dlg.close(); });
+  $('#enroll .cancel').addEventListener('click', () => { window.haunt.voice.enrollCancel(); dlg.close(); });
 
   // the meter in the dialog: proof her ears are on, drawn from the same real level
   (function meterLoop() {
@@ -258,13 +258,13 @@
       g.clearRect(0, 0, m.width, m.height);
       g.fillStyle = CY.cyan;
       g.globalAlpha = 0.9;
-      g.fillRect(0, 0, m.width * Math.min(1, window.hangarMic.level * 1.4), m.height);
+      g.fillRect(0, 0, m.width * Math.min(1, window.hauntMic.level * 1.4), m.height);
     }
     requestAnimationFrame(meterLoop);
   })();
 
   // ── events from main ──────────────────────────────────────────────────────
-  window.hangar.voice.onEvent((ev) => {
+  window.haunt.voice.onEvent((ev) => {
     switch (ev.t) {
       case 'status': applyStatus(ev); break;
       case 'phase':
@@ -289,13 +289,13 @@
         break;
       case 'say':
         miraSays(ev.text);
-        (ev.bays || []).forEach((id) => window.hangarBayFlash?.(id));
+        (ev.bays || []).forEach((id) => window.hauntBayFlash?.(id));
         break;
       case 'ptt': showToast('go ahead — no wake word needed'); break;
       case 'toast': showToast(ev.text); break;
       case 'need':
         if (ev.what === 'models') showToast('voice models are not downloaded — run: npm run voice-models', true);
-        if (ev.what === 'mic') showToast('hangar has no microphone permission — System Settings → Privacy → Microphone');
+        if (ev.what === 'mic') showToast('haunt has no microphone permission — System Settings → Privacy → Microphone');
         if (ev.what === 'profile') { showToast('mira heard a voice, but has not learned yours yet'); openEnroll(); }
         break;
       case 'enroll-got':
@@ -320,12 +320,12 @@
     enrolled = true;
     // 'start': drive a real fleet action through main's armed test hook — the grid must
     // grow a live session, exactly as if the brain had ordered it.
-    if (mode === 'start' && window.hangar.voice.demoStart) {
+    if (mode === 'start' && window.haunt.voice.demoStart) {
       phase = 'listening';
       youSaid('Mira, yeni bir proje başlat.');
       miraSays('Açıyorum efendim — yeni session hazır.');
       lastActivity = Infinity;
-      window.hangar.voice.testAct({ actions: [{ type: 'start', path: window.hangar.voice.demoStart, create: true, text: 'Reply with exactly: MIRA WAS HERE' }] });
+      window.haunt.voice.testAct({ actions: [{ type: 'start', path: window.haunt.voice.demoStart, create: true, text: 'Reply with exactly: MIRA WAS HERE' }] });
       paintChrome();
       return;
     }
@@ -343,7 +343,7 @@
 
   (async () => {
     paintChrome();
-    if (window.hangar.voice.demo) demo(window.hangar.voice.demo);
-    else applyStatus(await window.hangar.voice.status());
+    if (window.haunt.voice.demo) demo(window.haunt.voice.demo);
+    else applyStatus(await window.haunt.voice.status());
   })();
 })();

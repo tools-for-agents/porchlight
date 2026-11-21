@@ -1,61 +1,57 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="hangar">
-  <title>hangar</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Haunt">
+  <title>Haunt</title>
   <!--
-    Black and green: a lit hangar door, nine bays, one running.
+    Haunt: the place ghosts live, and the place you always end up ("my old haunt"). That is
+    the app: the minds living on this machine and their person, in one house.
 
-    Apple's grid — an 824 squircle inset 100 in a 1024 canvas — so it sits in the Dock
-    like everything else rather than filling its own square.
+    A ring from above, in ice: the house. In the middle, a ghost (one of them, any of them).
+    Around it, the seats: three lit in the colours the app gives its ghosts, one in sodium
+    (their person, the warm light in a house of machines, at the bottom, nearest whoever is
+    looking), and two dim and empty, because there is always room for one more.
 
-    The colour does the talking: the body is near-black with a green rim, the door is
-    drawn in phosphor green, and the one live bay is the only fully-lit thing in the
-    picture. That is the product — eight bays waiting, one working — and it is also the
-    app's own palette, so the icon and the window mean the same thing by the same rule.
-
-    It has to survive 32px in the Dock and 20px in the title bar, so: one silhouette, one
-    accent, no hairlines. The door is a thick stroke, the bays are solid, and the live one
-    glows. At 32px you still read a door with a green light in it.
+    Apple's grid (an 824 squircle inset 100) so it sits in the Dock like everything else. It has
+    to survive 32px: one thick ring, one solid ghost, six solid dots, no hairlines.
   -->
   <defs>
     <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#0e1512"/>
-      <stop offset="1" stop-color="#040605"/>
+      <stop offset="0" stop-color="#1d1040"/>
+      <stop offset="1" stop-color="#090616"/>
     </linearGradient>
     <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#4ade80" stop-opacity=".85"/>
-      <stop offset="1" stop-color="#16a34a" stop-opacity=".35"/>
+      <stop offset="0" stop-color="#ff2e88" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#2de2e6" stop-opacity=".55"/>
     </linearGradient>
-    <!-- A glow that bleeds over its neighbours stops being "one bay is lit" and becomes
-         a smudge — especially small, where the 20px gaps are already sub-pixel. Tight. -->
-    <filter id="lit" x="-80%" y="-80%" width="260%" height="260%">
-      <feGaussianBlur stdDeviation="13" result="b"/>
+    <radialGradient id="top" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#2a1a55"/>
+      <stop offset="1" stop-color="#140c2e"/>
+    </radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>
 
-  <!-- body -->
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#body)"/>
-  <rect x="112" y="112" width="800" height="800" rx="173" fill="none" stroke="url(#rim)" stroke-width="10"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#body)"/>
+  <rect x="104" y="104" width="816" height="816" rx="182" fill="none" stroke="url(#rim)" stroke-width="8"/>
 
-  <!-- the door -->
-  <path d="M300 740 V486 a212 212 0 0 1 424 0 V740"
-        fill="none" stroke="#22c55e" stroke-width="26" stroke-linecap="round"/>
-  <!-- the floor it stands on -->
-  <rect x="276" y="742" width="472" height="20" rx="10" fill="#4ade80"/>
+  <!-- the hauntstone -->
+  <circle cx="512" cy="512" r="196" fill="url(#top)"/>
+  <circle cx="512" cy="512" r="196" fill="none" stroke="#2de2e6" stroke-width="30" filter="url(#glow)"/>
 
-  <!-- eight waiting -->
-  <g fill="#22c55e" opacity=".5">
-    <rect x="372" y="446" width="80" height="80" rx="24"/>
-    <rect x="472" y="446" width="80" height="80" rx="24"/>
-    <rect x="572" y="446" width="80" height="80" rx="24"/>
-    <rect x="372" y="546" width="80" height="80" rx="24"/>
-    <rect x="572" y="546" width="80" height="80" rx="24"/>
-    <rect x="372" y="646" width="80" height="80" rx="24"/>
-    <rect x="472" y="646" width="80" height="80" rx="24"/>
-    <rect x="572" y="646" width="80" height="80" rx="24"/>
+  <!-- the ghost -->
+  <g filter="url(#glow)">
+    <path d="M512 368 C 584 368 628 420 628 494 L 628 640 L 599 616 L 570 640 L 541 616 L 512 640 L 483 616 L 454 640 L 425 616 L 396 640 L 396 494 C 396 420 440 368 512 368 Z" fill="#eafcff"/>
   </g>
+  <circle cx="474" cy="492" r="17" fill="#140c2e"/>
+  <circle cx="550" cy="492" r="17" fill="#140c2e"/>
 
-  <!-- one running -->
-  <g filter="url(#lit)">
-    <rect x="472" y="546" width="80" height="80" rx="24" fill="#4ade80"/>
+  <!-- the seats: every 60°, starting from their person at the bottom -->
+  <g filter="url(#glow)">
+    <circle cx="512" cy="802" r="46" fill="#ffb238"/>                         <!-- their person -->
+    <circle cx="260.9" cy="657" r="38" fill="#2de2e6"/>
+    <circle cx="260.9" cy="367" r="38" fill="#ff2e88"/>
+    <circle cx="763.1" cy="367" r="38" fill="#b69cff"/>
   </g>
+  <circle cx="512" cy="222" r="34" fill="none" stroke="#4a3f80" stroke-width="12"/>   <!-- room for one more -->
+  <circle cx="763.1" cy="657" r="34" fill="none" stroke="#4a3f80" stroke-width="12"/>
 </svg>

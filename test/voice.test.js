@@ -146,7 +146,7 @@ test('memoryDirFor: the munge Claude Code actually uses — every / and . become
 
 test('buildPrompt: memory indexes ride inline, with their dirs, and the write rules', () => {
   const snap = { pageIndex: 0, focusedBayId: null, pages: [{ id: 'p', bays: [] }], running: {} };
-  const mem = [{ title: 'hangar', dir: '/h/.claude/projects/x/memory', index: '- [mission](m.md) — ship it' }];
+  const mem = [{ title: 'haunt', dir: '/h/.claude/projects/x/memory', index: '- [mission](m.md) — ship it' }];
   const p = buildPrompt(snap, 'şu iş nasıl gidiyor', [], mem);
   assert.ok(p.includes('ship it'), 'the index content is in the prompt');
   assert.ok(p.includes('/h/.claude/projects/x/memory'), 'and the dir the files live in');
@@ -199,7 +199,7 @@ test('buildContext: ids, spoken numbers, RUNNING/FOCUSED marks, whole-fleet tail
     pageIndex: 0,
     focusedBayId: 'pg_a s1'.replace(' ', ''),
     pages: [
-      { id: 'pg_a', bays: [{ title: 'hangar', path: '/x/hangar' }, { title: 'iris', path: '/x/iris' }, null, null, null, null, null, null, null] },
+      { id: 'pg_a', bays: [{ title: 'haunt', path: '/x/haunt' }, { title: 'iris', path: '/x/iris' }, null, null, null, null, null, null, null] },
       { id: 'pg_b', bays: [{ title: 'scout', path: '/x/scout' }, null, null, null, null, null, null, null, null] },
     ],
     running: {
@@ -208,7 +208,7 @@ test('buildContext: ids, spoken numbers, RUNNING/FOCUSED marks, whole-fleet tail
     },
   };
   const ctx = buildContext(snap);
-  assert.ok(ctx.includes('bay 1 [id=pg_as0] "hangar"'));
+  assert.ok(ctx.includes('bay 1 [id=pg_as0] "haunt"'));
   assert.ok(ctx.includes('RUNNING'));
   assert.ok(ctx.includes('FOCUSED'), 'bay 2 on page 1 is where the user is');
   assert.ok(ctx.includes('tests: 12 passed'), 'on-screen running bay shows its tail');

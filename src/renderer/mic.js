@@ -2,7 +2,7 @@
 
 /* The microphone, as the engine wants it: mono, 16kHz, 16-bit, ~120ms at a time.
  * getUserMedia only exists in the renderer, so capture starts here; everything after
- * the resample happens across the bridge in main. Exposes window.hangarMic. */
+ * the resample happens across the bridge in main. Exposes window.hauntMic. */
 
 (() => {
   const TARGET_SR = 16000;
@@ -33,7 +33,7 @@
       const lo = Math.floor(i), frac = i - lo;
       const s = joined[lo] * (1 - frac) + joined[lo + 1] * frac;
       acc[accLen++] = Math.max(-32768, Math.min(32767, Math.round(s * 32767)));
-      if (accLen === CHUNK) { window.hangar.voice.frame(acc.buffer.slice(0)); accLen = 0; }
+      if (accLen === CHUNK) { window.haunt.voice.frame(acc.buffer.slice(0)); accLen = 0; }
       i += ratio;
     }
     const keepFrom = Math.floor(i);
@@ -96,5 +96,5 @@
     level = 0;
   }
 
-  window.hangarMic = { start, stop, get live() { return !!ctx; }, get level() { return level; } };
+  window.hauntMic = { start, stop, get live() { return !!ctx; }, get level() { return level; } };
 })();

@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Build hangar, sign it with a STABLE identity, and install it to /Applications.
+# Build haunt, sign it with a STABLE identity, and install it to /Applications.
 #
 # ── Why this file exists ─────────────────────────────────────────────────────
 #
@@ -7,8 +7,8 @@
 #
 # Every folder a bay points at under ~/Desktop, ~/Documents or ~/Downloads is
 # TCC-protected. The agent in the tile reads it, macOS attributes that read to the
-# app that spawned it — hangar — and asks. Once. Then it writes the answer down
-# against hangar's *designated requirement*.
+# app that spawned it — haunt — and asks. Once. Then it writes the answer down
+# against haunt's *designated requirement*.
 #
 # electron-builder ships this app with `identity: null`, which does not sign the
 # bundle at all: what survives is Electron's raw linker signature, and the whole
@@ -24,7 +24,7 @@
 #
 # Signing with a certificate — even one we made ourselves — changes the requirement to
 #
-#     identifier "dev.toolsforagents.hangar" and certificate leaf = H"<the cert>"
+#     identifier "dev.toolsforagents.haunt" and certificate leaf = H"<the cert>"
 #
 # which is the same string after every rebuild. Grant Full Disk Access once and it
 # holds for good. That is the entire point of this script.
@@ -38,18 +38,18 @@
 set -e
 cd "$(dirname "$0")/.."
 
-CN="hangar-dev-signing"                     # the certificate's common name
-APPID="dev.toolsforagents.hangar"           # must match CFBundleIdentifier
-APP="dist/mac-arm64/hangar.app"
-DEST="/Applications/hangar.app"
+CN="hangar-dev-signing"                    # the certificate's common name — kept from the hangar days: a new one would void Full Disk Access and ask for the login password twice
+APPID="com.algolindustries.haunt"           # must match CFBundleIdentifier
+APP="dist/mac-arm64/Haunt.app"
+DEST="/Applications/Haunt.app"
 
 # ── 0. Do not kill live agents behind the user's back ────────────────────────
-# Replacing the bundle means quitting hangar, and hangar kills every bay on quit.
+# Replacing the bundle means quitting haunt, and haunt kills every bay on quit.
 # Those are real sessions with real work in them. Ask.
-RUNNING=$(pgrep -f "hangar.app/Contents/MacOS/hangar" || true)
+RUNNING=$(pgrep -f "(hangar|Sofra|Hearth|Haunt).app/Contents/MacOS/(hangar|Sofra|Hearth|Haunt)" || true)   # the old hangar/Sofra/Hearth.app counts: it holds the same bays
 if [[ -n "$RUNNING" ]]; then
   BAYS=$(pgrep -fc -- "--dangerously-skip-permissions" || echo 0)
-  echo "hangar is running with $BAYS agent(s) in it. Installing will quit it and end them."
+  echo "haunt is running with $BAYS agent(s) in it. Installing will quit it and end them."
   printf "continue? [y/N] "
   read -r ans
   [[ "$ans" == (y|Y|yes) ]] || { echo "left alone."; exit 1; }
@@ -144,20 +144,31 @@ esac
 # ── 5. Install ───────────────────────────────────────────────────────────────
 echo "▸ installing to $DEST…"
 osascript -e 'tell application "hangar" to quit' >/dev/null 2>&1 || true
-for i in {1..20}; do pgrep -f "hangar.app/Contents/MacOS/hangar" >/dev/null || break; sleep 0.5; done
-pkill -f "hangar.app/Contents/MacOS/hangar" >/dev/null 2>&1 || true
+osascript -e 'tell application "Sofra" to quit' >/dev/null 2>&1 || true
+osascript -e 'tell application "Hearth" to quit' >/dev/null 2>&1 || true
+osascript -e 'tell application "Haunt" to quit' >/dev/null 2>&1 || true
+for i in {1..20}; do pgrep -f "(hangar|Sofra|Hearth|Haunt).app/Contents/MacOS/(hangar|Sofra|Hearth|Haunt)" >/dev/null || break; sleep 0.5; done
+pkill -f "(hangar|Sofra|Hearth|Haunt).app/Contents/MacOS/(hangar|Sofra|Hearth|Haunt)" >/dev/null 2>&1 || true
 rm -rf "$DEST"
 cp -R "$APP" "$DEST"
 xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true
+# hangar was renamed Haunt (same app, same data folder). The old bundle goes to the Trash, not
+# into rm -rf: it is the previous working copy, and the Trash gives it back if Haunt misbehaves.
+for OLD in hangar Sofra Hearth; do
+  if [ -d "/Applications/$OLD.app" ]; then
+    osascript -e "tell application \"Finder\" to delete POSIX file \"/Applications/$OLD.app\"" >/dev/null 2>&1 \
+      && echo "▸ the old /Applications/$OLD.app is in the Trash (Haunt replaces it; your bays carry over)"
+  fi
+done
 
 cat <<'EOF'
 
   Installed. One thing left, and it is the thing that stops the dialogs:
 
-    System Settings → Privacy & Security → Full Disk Access → +  →  /Applications/hangar.app
+    System Settings → Privacy & Security → Full Disk Access → +  →  /Applications/Haunt.app
 
   Full Disk Access supersedes the per-folder Desktop/Documents/Downloads questions,
-  and the agents in the bays inherit it from hangar — so it is one switch, not one
+  and the agents in the bays inherit it from haunt — so it is one switch, not one
   question per folder. Because the app is now signed with a stable certificate, you
   will not be asked again after the next `npm run dist`.
 

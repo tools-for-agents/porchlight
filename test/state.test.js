@@ -1,6 +1,6 @@
 'use strict';
 
-// The bay list is the only thing hangar remembers, and it once forgot seven of somebody's.
+// The bay list is the only thing haunt remembers, and it once forgot seven of somebody's.
 // These tests are that bug, written down. They need no Electron and no window: state.js
 // takes a directory, which is the whole reason it is a separate file.
 
@@ -12,7 +12,7 @@ const path = require('node:path');
 
 const { stateStore, emptyState, BAYS_PER_PAGE } = require('../src/state.js');
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'hangar-state-'));
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'haunt-state-'));
 const seven = () => ({
   pages: [{
     id: 'pg_main',

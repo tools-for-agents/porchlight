@@ -1,4 +1,6 @@
-# hangar
+# Haunt
+
+*(formerly hangar)* — the house the minds on this machine haunt, and their person with them. A chat with every ghost in the house (`ghost house`), and a live terminal for each.
 
 **Nine bays. Press `+`, pick a folder, and a Claude agent starts there — live, in the tile.**
 
@@ -8,10 +10,10 @@ doing and type back into it. The folder's name becomes the bay's title, and ever
 bay gets its own colour so nine of them stay tellable apart. Nine to a page; add and close
 pages as you like. Your 5h and 7d limits sit in the footer.
 
-Close hangar and reopen it: the bays come back and their agents start again.
+Close haunt and reopen it: the bays come back and their agents start again.
 
-<!-- screenshot: docs/hangar.png -->
-![hangar with three agents running](docs/hangar.png)
+<!-- screenshot: docs/haunt.png -->
+![haunt with three agents running](docs/haunt.png)
 
 ---
 
@@ -33,13 +35,13 @@ nothing in the UI takes a command to run, so a bug in a tile cannot turn it into
 
 ## Auth and secrets
 
-hangar has no accounts, no config, no API keys, and no network calls of its own. It spawns
+haunt has no accounts, no config, no API keys, and no network calls of its own. It spawns
 your local `claude`, which authenticates itself exactly as it does in your terminal. Nothing
 is sent anywhere, and there is nothing here to leak.
 
-What it stores, in `~/Library/Application Support/hangar/state.json`: the folder paths you
+What it stores, in `~/Library/Application Support/haunt/state.json`: the folder paths you
 picked and their titles. Nothing else. It is written atomically and the previous version is
-kept beside it as `state.bak.json`; if the live file is ever unreadable hangar recovers from
+kept beside it as `state.bak.json`; if the live file is ever unreadable haunt recovers from
 the backup, keeps the bad one as `state.json.corrupt`, and refuses to write anything until
 you make a deliberate change — an empty grid on screen is a display, an empty grid on disk
 is your bays deleted.
@@ -49,8 +51,8 @@ is your bays deleted.
 Requires [Claude Code](https://claude.com/claude-code) on your `PATH` and Node 20+.
 
 ```sh
-git clone https://github.com/tools-for-agents/hangar.git
-cd hangar
+git clone https://github.com/tools-for-agents/haunt.git
+cd haunt
 npm install        # rebuilds node-pty against Electron — this is the slow step
 npm start
 ```
@@ -81,7 +83,7 @@ Click into a tile and type — it is a real terminal, so `shift+tab` cycles perm
 Nine live TUIs on one screen is twelve rows each: enough to see that an agent is working,
 not enough to work with it. So zoom (`⤢`, or double-click a title bar) gives one bay the
 whole window and a full-height terminal; the other eight keep running behind it. Switching pages does not disturb an agent: the
-process keeps running and the tile replays its output when you come back. Quitting hangar
+process keeps running and the tile replays its output when you come back. Quitting haunt
 stops every agent it started.
 
 ## mira — talking to your agents
@@ -96,7 +98,7 @@ Turn her on (click, or `⌘⇧J`), teach her your voice once — three sentences
 and from then on:
 
 > **“Mira, bay üç nasıl gidiyor?”** — she reads that bay's terminal and tells you, out loud.
-> **“Mira, run the tests in the hangar project.”** — she types the prompt into that bay's agent, and the tile flares in its own hue so you see the order land.
+> **“Mira, run the tests in the haunt project.”** — she types the prompt into that bay's agent, and the tile flares in its own hue so you see the order land.
 > **“Mira, dur.”** — she interrupts the agent, the way `esc` would.
 > **“Mira, yeni bir proje başlat, adı X olsun, şunu yaptır…”** — she creates the folder (under
 > wherever your projects already live), opens a session in it, and dictates the first task to
@@ -138,7 +140,7 @@ npm run voice-models   # one-time, ~840MB down / ~570MB kept (VAD + whisper + vo
 # then: turn on the orb, allow the microphone, read the three lines
 ```
 
-The models live in `~/Library/Application Support/hangar/voice-models`; the voiceprint in
+The models live in `~/Library/Application Support/haunt/voice-models`; the voiceprint in
 `voice-profile.json` next to your state file — delete it and mira is deaf to everyone
 again. `voice.json` alongside takes `{"wake": ["mira", "jarvis"], "model": "haiku"}` if
 you want different wake words or a different brain.
@@ -151,13 +153,13 @@ and the app say the same thing.
 
 Colour means one thing here: **green is running.** Each bay also carries its own hue, but
 only as an edge and a dot — the title stays white on near-black, because a tinted title bar
-greys down the one word you scan nine of. hangar is part of
+greys down the one word you scan nine of. haunt is part of
 [tools-for-agents](https://github.com/tools-for-agents) and keeps the kit's 4px grid and
 type scale — the palette is its own.
 
 ## The footer, and the bar that is not there
 
-The tiles do not show Claude Code's status line. hangar hands each session a `--settings`
+The tiles do not show Claude Code's status line. haunt hands each session a `--settings`
 override whose `statusLine` command prints nothing, so the bar you would otherwise get
 nine copies of — inside nine twelve-row terminals — is gone, and the two numbers it
 carried are in the footer once instead.
@@ -172,7 +174,7 @@ Four things in here cost real time and are worth knowing:
 
 - **A GUI app does not have your `PATH`.** Launched from Finder, the process inherits
   `/usr/bin:/bin:/usr/sbin:/sbin` — not your shell's `PATH` — so `~/.local/bin/claude` is not
-  there and `spawn claude` fails on a machine where `claude` works fine. hangar asks your login
+  there and `spawn claude` fails on a machine where `claude` works fine. haunt asks your login
   shell where it is, once, and caches it.
 - **A `display:` rule beats `[hidden]`.** `.plus` and `.live` both set `display`, so the
   `hidden` attribute did nothing until the stylesheet said `.plus[hidden] { display: none }`
@@ -181,9 +183,9 @@ Four things in here cost real time and are worth knowing:
 - **An interactive shell talks, and its chatter is on stdout.** `zsh -lic 'printf %s "$PATH"'`
   returns `Restored session: Fri Jul 17 12:22:46\n/Users/me/.local/bin:...` on macOS, because
   `/etc/zshrc_Apple_Terminal` announces itself. Taking that as `PATH` puts a newline inside the
-  first entry and poisons every lookup downstream — `claude` still launched (hangar spawns it by
+  first entry and poisons every lookup downstream — `claude` still launched (haunt spawns it by
   absolute path) but its statusline could not resolve `node`, silently, with no error anywhere.
-  hangar marks the value with a sentinel and only trusts what comes after it.
+  haunt marks the value with a sentinel and only trusts what comes after it.
 - **Claude Code does not run the statusline in a short terminal.** Measured: at 16 rows it
   runs; at 12 it is never invoked at all — and a bay in a 3×3 grid is 12 rows. The elegant
   plan (let the statusline the user already had feed the footer for free) cannot work in the

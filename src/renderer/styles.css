@@ -1,23 +1,25 @@
-/* hangar — the kit's palette (agent-hq's), the kit's grid (4px), the kit's type scale.
+/* haunt — the kit's palette (agent-hq's), the kit's grid (4px), the kit's type scale.
    Values that are not in iris/tokens.json are drift; there is a gate for that in the kit
    and this file is meant to survive it. */
 :root {
   /* Black and green. The kit's 4px grid and type scale still apply; the palette is
-     hangar's own, because a wall of terminals should look like terminals — and the icon
+     haunt's own, because a wall of terminals should look like terminals — and the icon
      is the same two colours, so the Dock and the window agree. */
-  --bg: #050807;
-  --panel: #0b100d;
-  --panel-2: #131a16;
-  --line: #1d2721;
-  --line-2: #2c3a33;
-  --txt: #e8f5ee;
-  --muted: #7d9188;
-  --accent: #4ade80;          /* green: the one thing that means "running" */
-  --accent-2: #22c55e;
-  --green: #4ade80;
+  --bg: #0a0817;
+  --panel: #120e26;
+  --panel-2: #1a1534;
+  --line: #241e45;
+  --line-2: #352d63;
+  --txt: #ece8ff;
+  --muted: #8d87b5;
+  --accent: #2de2e6;          /* ice: the one thing that means "awake / running" */
+  --accent-2: #19b8bc;
+  --green: #2de2e6;
   --amber: #fbbf24;
   --red: #f87171;
-  --cyan: #5eead4;
+  --cyan: #2de2e6;
+  --neon: #ff2e88;            /* the interface's own hand: focus, send, the selected thing */
+  --sodium: #ffb238;          /* their person: a streetlight in a night of machines */
   --radius: 12px;
   --shadow: 0 8px 24px rgba(0, 0, 0, .55);
 }
@@ -26,11 +28,11 @@
 html, body { margin: 0; height: 100%; overflow: hidden; }
 
 body {
-  background: radial-gradient(1100px 560px at 82% -12%, #0d1f16 0%, var(--bg) 58%) fixed;
+  background: radial-gradient(1200px 620px at 78% -14%, #22124a 0%, var(--bg) 60%) fixed;
   color: var(--txt);
-  font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 14px/1.5 "Plex", ui-sans-serif, system-ui, -apple-system, sans-serif;
   display: grid;
-  grid-template-rows: auto 1fr auto;   /* bar · grid · footer */
+  grid-template-rows: auto minmax(0, 1fr) auto;   /* bar · grid+house · footer */
   height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
@@ -42,7 +44,7 @@ body {
   gap: 20px;
   padding: 12px 20px 12px 92px;   /* room for the traffic lights */
   border-bottom: 1px solid var(--line);
-  background: rgba(5, 8, 7, .74);
+  background: rgba(10, 8, 23, .78);
   backdrop-filter: blur(12px);
   -webkit-app-region: drag;        /* the bar IS the title bar */
 }
@@ -63,14 +65,14 @@ body {
   transition: color .12s, border-color .12s, background .12s;
 }
 .page-btn:hover { color: var(--txt); border-color: var(--line); background: var(--panel-2); }
-.page-btn.on { color: var(--txt); border-color: var(--accent); background: rgba(74, 222, 128, .12); }
+.page-btn.on { color: var(--txt); border-color: var(--accent); background: rgba(45, 226, 230, .12); }
 .page-btn .n { font-variant-numeric: tabular-nums; }
 /* A page you are NOT looking at can still have agents on it — that is the only thing this
    dot is for. On the page you are on it says nothing you cannot already see, so it is not
    drawn there. */
 .page-btn .live-dot {
   width: 5px; height: 5px; border-radius: 999px; background: var(--green);
-  box-shadow: 0 0 8px rgba(74, 222, 128, .8);
+  box-shadow: 0 0 8px rgba(45, 226, 230, .8);
   flex: none;
 }
 
@@ -84,7 +86,7 @@ body {
   transition: color .12s, border-color .12s;
 }
 .ghost:hover { color: var(--red); border-color: var(--red); }
-/* Disabled = inert, but still hangar's palette. These two greys were #4a5468 / #1b2130 —
+/* Disabled = inert, but still haunt's palette. These two greys were #4a5468 / #1b2130 —
    BLUE-greys, stranded here from agent-hq's palette, the one off-grid thing in the file. Derive
    the dim from the tokens instead (opacity:1 kept on purpose: a flat mix reads cleaner on a
    bordered button than a translucent one). */
@@ -124,9 +126,9 @@ body {
 }
 .bay:has(.plus:not([hidden])):hover {
   border-color: var(--accent-2);
-  background: rgba(74, 222, 128, .03);
+  background: rgba(45, 226, 230, .03);
 }
-.bay:has(.live:not([hidden])) { background: #050807; }
+.bay:has(.live:not([hidden])) { background: #0a0817; }
 /* (the old `.bay.busy { border-color: rgba(110,168,254,.45) }` lived here — a blue-grey
    stranded from agent-hq's palette that the bay-c rule below already overrode. Dead drift,
    removed; the live rule is at the bottom with the rest of the per-bay colour.) */
@@ -150,7 +152,7 @@ body {
   color: var(--muted); font: inherit;
   transition: background .12s, color .12s;
 }
-.plus:hover { background: rgba(74, 222, 128, .05); color: var(--txt); }
+.plus:hover { background: rgba(45, 226, 230, .05); color: var(--txt); }
 .plus:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
 .plus-glyph {
   width: 44px; height: 44px; border-radius: 999px;
@@ -182,7 +184,7 @@ body {
   width: 8px; height: 8px; border-radius: 999px; flex: none;
   background: var(--muted);
 }
-.dot.running { background: var(--green); box-shadow: 0 0 8px rgba(74, 222, 128, .6); }
+.dot.running { background: var(--green); box-shadow: 0 0 8px rgba(45, 226, 230, .6); }
 .dot.exited { background: var(--red); }
 .title {
   flex: 1; min-width: 0;
@@ -239,7 +241,7 @@ body {
   padding: 12px 16px;
   border-radius: var(--radius); border: 1px solid var(--line-2);
   background: rgba(5, 8, 7, .88); backdrop-filter: blur(16px);
-  box-shadow: var(--shadow), 0 0 32px rgba(74, 222, 128, .06);
+  box-shadow: var(--shadow), 0 0 32px rgba(45, 226, 230, .06);
   z-index: 10;
 }
 #comm[hidden] { display: none; }
@@ -251,7 +253,7 @@ body {
 }
 .comm-line .tag { flex: none; width: 36px; text-align: right; font-size: 11px; letter-spacing: .04em; }
 .comm-line.you  .tag { color: var(--muted); }
-.comm-line.mira .tag { color: var(--accent); text-shadow: 0 0 8px rgba(74, 222, 128, .5); }
+.comm-line.mira .tag { color: var(--accent); text-shadow: 0 0 8px rgba(45, 226, 230, .5); }
 .comm-line .txt { color: var(--txt); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .comm-line.mira .txt { color: #d9fbe7; }
 .comm-line.mira .txt.dim { color: var(--muted); }
@@ -312,7 +314,7 @@ body {
 #enroll .capture {
   height: 28px; padding: 0 12px;
   border-radius: 8px; border: 1px solid var(--accent);
-  background: rgba(74, 222, 128, .12); color: var(--txt);
+  background: rgba(45, 226, 230, .12); color: var(--txt);
   font: inherit; font-size: 12px; cursor: pointer;
 }
 #enroll .capture:disabled { opacity: .6; cursor: wait; }
@@ -422,6 +424,6 @@ body {
 #grid.zoomed .bay.zoom { display: block; }
 /* ⤢ rides the same 12px as ↗ ⟳ ✕ beside it. It was 11px — under the kit's minFont:12, the
    one type-token violation in the repo, and it made the zoom control quietly the runt of the
-   four action glyphs. There is no gate for this here (hangar can't `serve`), so it survived by
+   four action glyphs. There is no gate for this here (haunt can't `serve`), so it survived by
    never being looked at. .act already sets 12px; the override is gone. */
 .bay.zoom .act.zoom { color: var(--accent); }

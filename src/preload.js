@@ -7,7 +7,7 @@
 
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
-contextBridge.exposeInMainWorld('hangar', {
+contextBridge.exposeInMainWorld('haunt', {
   // 🔑 THE ONLY WAY TO GET A DROPPED FILE'S PATH ON ELECTRON ≥32.
   //
   // `File.path` — the property every drag-and-drop snippet on the internet uses — was
@@ -20,13 +20,13 @@ contextBridge.exposeInMainWorld('hangar', {
   pathForFile: (file) => {
     try { return webUtils.getPathForFile(file) || ''; } catch { return ''; }
   },
-  // test hook: HANGAR_ZOOM=<bayId> npm start  → boots with that bay zoomed, so the
+  // test hook: HAUNT_ZOOM=<bayId> npm start  → boots with that bay zoomed, so the
   // screenshot harness can photograph a state that otherwise needs a click.
-  zoomAtBoot: process.env.HANGAR_ZOOM || null,
+  zoomAtBoot: process.env.HAUNT_ZOOM || null,
 
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
 
-  start: (id, cwd, cols, rows) => ipcRenderer.invoke('bay:start', { id, cwd, cols, rows }),
+  start: (id, cwd, cols, rows, home) => ipcRenderer.invoke('bay:start', { id, cwd, cols, rows, home }),
   kill: (id) => ipcRenderer.invoke('bay:kill', { id }),
   write: (id, data) => ipcRenderer.send('bay:write', { id, data }),
   resize: (id, cols, rows) => ipcRenderer.send('bay:resize', { id, cols, rows }),
@@ -43,13 +43,28 @@ contextBridge.exposeInMainWorld('hangar', {
   onData: (fn) => ipcRenderer.on('bay:data', (_e, p) => fn(p)),
   onExit: (fn) => ipcRenderer.on('bay:exit', (_e, p) => fn(p)),
 
+  // The house: the ghosts on this machine and the room they share. The renderer may name a mind
+  // to start a bay as (main checks it against `ghost house`), read the room, and say one line in it.
+  house: {
+    get: () => ipcRenderer.invoke('house:get'),
+    birth: () => ipcRenderer.invoke('house:birth'),
+    room: () => ipcRenderer.invoke('room:get'),
+    say: (text) => ipcRenderer.invoke('room:say', { text }),
+    onLines: (fn) => ipcRenderer.on('room:lines', (_e, p) => fn(p)),
+    onTyped: (fn) => ipcRenderer.on('house:typed', (_e, p) => fn(p)),
+    onActive: (fn) => ipcRenderer.on('bay:active', (_e, p) => fn(p)),
+    // test hook: HAUNT_HOUSE_CHAN=<ghost name> boots the chat on that conversation, for the screenshot harness
+    chanAtBoot: process.env.HAUNT_HOUSE_CHAN || null,
+    viewAtBoot: process.env.HAUNT_VIEW || null,   // test hook: chat | bays
+  },
+
   // jarvis — the voice. The renderer contributes the microphone (getUserMedia lives
   // there) and the orb; every decision — whose voice, which bay, what to type — is made
   // in main. Raw audio goes DOWN this bridge; only status events ever come back up.
   voice: {
-    // test hook: HANGAR_VOICE_DEMO=hearing|thinking|speaking|enroll boots the voice UI in
+    // test hook: HAUNT_VOICE_DEMO=hearing|thinking|speaking|enroll boots the voice UI in
     // that state with a sample exchange, so the screenshot harness can photograph it.
-    demo: process.env.HANGAR_VOICE_DEMO || null,
+    demo: process.env.HAUNT_VOICE_DEMO || null,
     toggle: () => ipcRenderer.invoke('voice:toggle'),
     status: () => ipcRenderer.invoke('voice:status'),
     frame: (buf) => ipcRenderer.send('voice:frame', buf),
@@ -61,8 +76,8 @@ contextBridge.exposeInMainWorld('hangar', {
     onEvent: (fn) => ipcRenderer.on('voice:event', (_e, p) => fn(p)),
     // mira changed the fleet (started/closed a session) — reload state and re-render
     onSync: (fn) => ipcRenderer.on('voice:sync', (_e, p) => fn(p)),
-    // test hook, dead unless main armed it (HANGAR_VOICE_DEMO)
+    // test hook, dead unless main armed it (HAUNT_VOICE_DEMO)
     testAct: (p) => ipcRenderer.send('voice:test-act', p),
-    demoStart: process.env.HANGAR_VOICE_DEMO_START || null,
+    demoStart: process.env.HAUNT_VOICE_DEMO_START || null,
   },
 });

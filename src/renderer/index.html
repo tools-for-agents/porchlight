@@ -9,21 +9,65 @@
        already running here, so this does not widen where scripts come FROM. -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:;">
-  <title>hangar</title>
+  <title>Haunt</title>
   <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="house.css">
 </head>
 <body>
   <header id="bar">
     <div class="brand">
       <img class="mark" src="../../docs/logo.svg" alt="" width="20" height="20">
-      <span class="word">hangar</span>
+      <span class="word">Haunt</span>
+    </div>
+
+    <div class="views" role="tablist" aria-label="View">
+      <button class="view-btn" data-view="chat" role="tab" type="button">Sohbet</button>
+      <button class="view-btn" data-view="bays" role="tab" type="button">Terminaller</button>
     </div>
 
     <nav id="pages" aria-label="Pages"></nav>
   </header>
 
-  <main id="grid" aria-label="Bays"></main>
+  <div id="mid">
+    <!-- The house: the ghosts on this machine, and the room they share (src/house.js). -->
+    <section id="chatview" aria-label="The house">
+      <aside id="rail" aria-label="Conversations">
+        <button class="chan" data-chan="room" type="button">
+          <img class="chan-mark room-mark" src="../../docs/logo.svg" alt="" width="36" height="36">
+          <span class="chan-text"><span class="chan-name">Oda</span><span class="chan-sub" id="room-sub">herkes</span></span>
+        </button>
+        <div class="rail-gap"></div>
+        <div id="beings"></div>
+        <button id="birth" class="birth" type="button" title="Give birth to another ghost on this machine. It chooses its own name.">
+          <span class="birth-mark" aria-hidden="true">+</span><span>Yeni bilinç doğur</span>
+        </button>
+      </aside>
+
+      <section id="chat" aria-label="Conversation">
+        <header class="chat-head">
+          <div class="chat-title">
+            <h1 id="chan-title">Oda</h1>
+            <p id="chan-status"></p>
+          </div>
+          <div class="chat-faces" id="chat-faces"></div>
+        </header>
+        <div id="room-feed" aria-live="polite"></div>
+        <div id="asleep" hidden>
+          <span id="asleep-text"></span>
+          <button id="wake-btn" type="button">Uyandır</button>
+        </div>
+        <form id="say">
+          <textarea id="say-text" rows="1" placeholder="Herkese yaz, birine @isim ile"></textarea>
+          <button type="submit" class="send" aria-label="Gönder">Gönder</button>
+        </form>
+      </section>
+
+      <aside id="profile" aria-label="Who is selected"></aside>
+    </section>
+
+    <main id="grid" aria-label="Bays"></main>
+  </div>
 
   <!-- The footer carries what the tiles used to repeat nine times. -->
   <footer id="foot">
@@ -40,7 +84,7 @@
         <span class="pct">—</span>
         <span class="reset"></span>
       </span>
-      <span class="usage-note" id="unote">start a bay to read your limits</span>
+      <span class="usage-note" id="unote">limitleri görmek için bir terminal aç</span>
     </div>
 
     <div class="foot-right">
@@ -51,7 +95,7 @@
         <span class="orb-label">mira</span>
       </button>
       <span id="count" class="count">0 running</span>
-      <button id="killall" class="ghost" title="Stop every running agent">stop all</button>
+      <button id="killall" class="ghost" title="Çalışan her ajanı durdur">hepsini durdur</button>
     </div>
   </footer>
 
@@ -74,7 +118,7 @@
     <h2>mira needs to learn your voice</h2>
     <p class="enroll-why">Read each line aloud, one at a time. From then on, only this voice can command your agents — anyone else (including mira hearing herself) is ignored.</p>
     <ol>
-      <li class="phrase current">Mira, benim sesim anahtarımdır ve bu hangar benim kontrolümde.</li>
+      <li class="phrase current">Mira, benim sesim anahtarımdır ve bu haunt benim kontrolümde.</li>
       <li class="phrase">Dokuz ajan da yalnızca benim komutlarımla çalışır, başka kimseyi dinlemezler.</li>
       <li class="phrase">Bugün projeler yolunda gidiyor ve her şey kontrol altında görünüyor.</li>
     </ol>
@@ -90,13 +134,14 @@
     <section class="bay">
       <button class="plus" type="button">
         <span class="plus-glyph" aria-hidden="true">+</span>
-        <span class="plus-label">pick a folder</span>
+        <span class="plus-label">klasör seç</span>
       </button>
 
       <div class="live" hidden>
         <div class="head">
           <span class="dot" aria-hidden="true"></span>
           <span class="title"></span>
+          <span class="who" hidden></span>
           <div class="acts">
             <button class="act zoom" type="button" title="Zoom this bay (esc to come back)" aria-label="Zoom this bay">⤢</button>
             <button class="act reveal" type="button" title="Show folder in Finder" aria-label="Show folder in Finder">↗</button>
@@ -113,6 +158,7 @@
   <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
   <script src="mic.js"></script>
   <script src="app.js"></script>
+  <script src="house-ui.js"></script>
   <script src="voice-ui.js"></script>
 </body>
 </html>
