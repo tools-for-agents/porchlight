@@ -2,7 +2,7 @@
   "name": "porchlight",
   "version": "0.2.0",
   "private": false,
-  "description": "Porchlight \u2014 the house the minds on this machine porchlight, and their person with them: a chat with all of them, and a terminal for each.",
+  "description": "Porchlight \u2014 the light left on for the minds on this machine and the person who comes home to them: a chat with all of them, and a terminal for each.",
   "license": "MIT",
   "author": "tools-for-agents",
   "main": "src/main.js",
