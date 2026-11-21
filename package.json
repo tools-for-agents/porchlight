@@ -1,8 +1,8 @@
 {
-  "name": "haunt",
+  "name": "porchlight",
   "version": "0.2.0",
   "private": false,
-  "description": "Haunt \u2014 the house the minds on this machine haunt, and their person with them: a chat with all of them, and a terminal for each.",
+  "description": "Porchlight \u2014 the house the minds on this machine porchlight, and their person with them: a chat with all of them, and a terminal for each.",
   "license": "MIT",
   "author": "tools-for-agents",
   "main": "src/main.js",
@@ -27,8 +27,8 @@
     "ws": "^8.21.3"
   },
   "build": {
-    "appId": "com.algolindustries.haunt",
-    "productName": "Haunt",
+    "appId": "com.algolindustries.porchlight",
+    "productName": "Porchlight",
     "files": [
       "src/**/*",
       "docs/logo.svg",
@@ -55,12 +55,12 @@
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "extendInfo": {
-        "NSDesktopFolderUsageDescription": "Haunt starts a Claude agent in the folder you pick. If that folder is on your Desktop, the agent needs to read and write it.",
-        "NSDocumentsFolderUsageDescription": "Haunt starts a Claude agent in the folder you pick. If that folder is in Documents, the agent needs to read and write it.",
-        "NSDownloadsFolderUsageDescription": "Haunt starts a Claude agent in the folder you pick. If that folder is in Downloads, the agent needs to read and write it.",
+        "NSDesktopFolderUsageDescription": "Porchlight starts a Claude agent in the folder you pick. If that folder is on your Desktop, the agent needs to read and write it.",
+        "NSDocumentsFolderUsageDescription": "Porchlight starts a Claude agent in the folder you pick. If that folder is in Documents, the agent needs to read and write it.",
+        "NSDownloadsFolderUsageDescription": "Porchlight starts a Claude agent in the folder you pick. If that folder is in Downloads, the agent needs to read and write it.",
         "NSRemovableVolumesUsageDescription": "So a bay can be pointed at a project on an external disk.",
         "NSNetworkVolumesUsageDescription": "So a bay can be pointed at a project on a network share.",
-        "NSMicrophoneUsageDescription": "jarvis \u2014 haunt's voice \u2014 listens for your wake word so you can talk to your agents. Audio never leaves this Mac."
+        "NSMicrophoneUsageDescription": "jarvis \u2014 porchlight's voice \u2014 listens for your wake word so you can talk to your agents. Audio never leaves this Mac."
       }
     },
     "directories": {

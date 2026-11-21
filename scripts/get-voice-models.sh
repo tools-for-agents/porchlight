@@ -1,6 +1,6 @@
 #!/bin/bash
-# Downloads the models jarvis (haunt's voice) runs on, once, into a fixed place:
-#   ~/Library/Application Support/haunt/voice-models   (override: HAUNT_MODELS)
+# Downloads the models jarvis (porchlight's voice) runs on, once, into a fixed place:
+#   ~/Library/Application Support/porchlight/voice-models   (override: PORCHLIGHT_MODELS)
 #
 # The dir is FIXED rather than derived from --user-data-dir on purpose: a test run in a
 # temp user-data-dir must not re-download 800MB, and the packaged app and `npm start`
@@ -17,7 +17,7 @@
 #  that keeps jarvis speaking on a plane)
 set -euo pipefail
 
-DIR="${HAUNT_MODELS:-$HOME/Library/Application Support/haunt/voice-models}"
+DIR="${PORCHLIGHT_MODELS:-$HOME/Library/Application Support/porchlight/voice-models}"
 BASE="https://github.com/k2-fsa/sherpa-onnx/releases/download"
 mkdir -p "$DIR"
 cd "$DIR"

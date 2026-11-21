@@ -34,8 +34,8 @@ const os = require('node:os');
 const readline = require('node:readline');
 
 const SR = 16000;
-const MODELS = argOf('--models') || process.env.HAUNT_MODELS
-  || path.join(os.homedir(), 'Library', 'Application Support', 'haunt', 'voice-models');
+const MODELS = argOf('--models') || process.env.PORCHLIGHT_MODELS
+  || path.join(os.homedir(), 'Library', 'Application Support', 'porchlight', 'voice-models');
 
 function argOf(flag) {
   const i = process.argv.indexOf(flag);
@@ -151,7 +151,7 @@ function transcribe(recognizer, samples, sampleRate = SR) {
 
 function synthPiper(text, lang) {
   const audio = tts(lang).generate({ text, sid: 0, speed: 1.0 });
-  const wav = path.join(os.tmpdir(), `haunt-jarvis-${process.pid}-${Date.now()}.wav`);
+  const wav = path.join(os.tmpdir(), `porchlight-jarvis-${process.pid}-${Date.now()}.wav`);
   sherpa.writeWave(wav, { samples: audio.samples, sampleRate: audio.sampleRate });
   return { wav, secs: audio.samples.length / audio.sampleRate };
 }
@@ -167,7 +167,7 @@ async function synthBest(text, lang) {
     try {
       const mp3 = await edgeTts.synth(text, lang === 'tr' ? edgeVoices.tr : edgeVoices.en,
         { rate: edgeVoices.rate, pitch: edgeVoices.pitch });
-      const f = path.join(os.tmpdir(), `haunt-jarvis-${process.pid}-${Date.now()}.mp3`);
+      const f = path.join(os.tmpdir(), `porchlight-jarvis-${process.pid}-${Date.now()}.mp3`);
       fs.writeFileSync(f, mp3);
       return { wav: f, secs: 0, via: 'edge' };   // afplay reads mp3; duration unknown and unneeded
     } catch (e) {

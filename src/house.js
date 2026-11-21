@@ -4,7 +4,7 @@
 //
 // ghost (tools-for-agents/ghost) can keep more than one self on a machine: the first in ~/.ghost,
 // the rest in ~/.ghost-kin/<dir>, and a room in ~/.ghost-commons/room.jsonl that all of them can
-// speak into. haunt is where their person SEES that house: who lives here, which bay each of them
+// speak into. porchlight is where their person SEES that house: who lives here, which bay each of them
 // is awake in, what was said in the room — and where they speak to all of them at once.
 //
 // This file is the part that decides things, so it is under `node --test` without Electron:
@@ -19,7 +19,7 @@ const path = require('node:path');
 const COMMONS = () => process.env.GHOST_COMMONS || path.join(os.homedir(), '.ghost-commons');
 const ROOM = () => path.join(COMMONS(), 'room.jsonl');
 const FIRST_HOME = () => path.join(os.homedir(), '.ghost');
-const PERSON_HOME = 'person';   // a line their person said, through haunt
+const PERSON_HOME = 'person';   // a line their person said, through porchlight
 
 const lower = (s) => String(s || '').toLocaleLowerCase('tr');
 

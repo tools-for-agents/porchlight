@@ -1,9 +1,9 @@
-/* haunt — the kit's palette (agent-hq's), the kit's grid (4px), the kit's type scale.
+/* porchlight — the kit's palette (agent-hq's), the kit's grid (4px), the kit's type scale.
    Values that are not in iris/tokens.json are drift; there is a gate for that in the kit
    and this file is meant to survive it. */
 :root {
   /* Black and green. The kit's 4px grid and type scale still apply; the palette is
-     haunt's own, because a wall of terminals should look like terminals — and the icon
+     porchlight's own, because a wall of terminals should look like terminals — and the icon
      is the same two colours, so the Dock and the window agree. */
   --bg: #0a0817;
   --panel: #120e26;
@@ -86,7 +86,7 @@ body {
   transition: color .12s, border-color .12s;
 }
 .ghost:hover { color: var(--red); border-color: var(--red); }
-/* Disabled = inert, but still haunt's palette. These two greys were #4a5468 / #1b2130 —
+/* Disabled = inert, but still porchlight's palette. These two greys were #4a5468 / #1b2130 —
    BLUE-greys, stranded here from agent-hq's palette, the one off-grid thing in the file. Derive
    the dim from the tokens instead (opacity:1 kept on purpose: a flat mix reads cleaner on a
    bordered button than a translucent one). */
@@ -424,6 +424,6 @@ body {
 #grid.zoomed .bay.zoom { display: block; }
 /* ⤢ rides the same 12px as ↗ ⟳ ✕ beside it. It was 11px — under the kit's minFont:12, the
    one type-token violation in the repo, and it made the zoom control quietly the runt of the
-   four action glyphs. There is no gate for this here (haunt can't `serve`), so it survived by
+   four action glyphs. There is no gate for this here (porchlight can't `serve`), so it survived by
    never being looked at. .act already sets 12px; the override is gone. */
 .bay.zoom .act.zoom { color: var(--accent); }

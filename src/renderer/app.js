@@ -1,6 +1,6 @@
 'use strict';
 
-/* haunt's renderer. It knows about bays, pages and terminals. It does not know how to
+/* porchlight's renderer. It knows about bays, pages and terminals. It does not know how to
    run anything — main.js decides that, and it only ever decides `claude`. */
 
 const BAYS_PER_PAGE = 9;
@@ -25,11 +25,11 @@ let focusedBay = null;  // last terminal the user was typing in — jarvis's "he
 
 // mira's brain needs to know what "here" means: the page on screen and the bay whose
 // terminal last held focus. Pushed, not polled — it changes on exactly these code paths.
-const sendView = () => window.haunt.voice?.view({ page: pageIndex, focused: focusedBay });
+const sendView = () => window.porchlight.voice?.view({ page: pageIndex, focused: focusedBay });
 
 // When mira types an order into a bay, that tile flares in its own hue — with nine
 // terminals on screen, "I sent it" means nothing unless you can SEE which one took it.
-window.hauntBayFlash = (id) => {
+window.porchlightBayFlash = (id) => {
   const el = terms.get(id)?.el.closest('.bay');
   if (!el) return;
   el.classList.remove('voice-hit');
@@ -87,7 +87,7 @@ const theme = {
 };
 
 // ── persistence ─────────────────────────────────────────────────────────────
-const save = () => { if (!readOnly) window.haunt.saveState(state); };
+const save = () => { if (!readOnly) window.porchlight.saveState(state); };
 
 // ── rendering ───────────────────────────────────────────────────────────────
 function renderPages() {
@@ -174,7 +174,7 @@ function renderGrid() {
     $('.title', node).textContent = bay.title;
     $('.title', node).title = bay.path;
     // which ghost woke here — the first one needs no badge, it is every bay that has none
-    const who = window.hauntWho?.(bay.home);
+    const who = window.porchlightWho?.(bay.home);
     if (who) { $('.who', node).hidden = false; $('.who', node).textContent = who; }
 
     const rec = terms.get(id);
@@ -188,7 +188,7 @@ function renderGrid() {
     $('.head', node).addEventListener('dblclick', () => toggleZoom(id));
     // clicking the chrome should put you in the terminal, not nowhere
     $('.head', node).addEventListener('click', (e) => { if (!e.target.closest('.act')) terms.get(id)?.term.focus(); });
-    $('.reveal', node).addEventListener('click', () => window.haunt.openFolder(bay.path));
+    $('.reveal', node).addEventListener('click', () => window.porchlight.openFolder(bay.path));
     $('.restart', node).addEventListener('click', () => startBay(id, slot, bay));
     $('.close', node).addEventListener('click', () => closeBay(id, slot));
 
@@ -256,7 +256,7 @@ function attachDrop(el, id, term) {
     if (!dt) return;
 
     const paths = [...(dt.files || [])]
-      .map((f) => window.haunt.pathForFile(f))
+      .map((f) => window.porchlight.pathForFile(f))
       .filter(Boolean);
 
     // Dropping a selection, a URL, or a path from another app hands over TEXT and no
@@ -269,7 +269,7 @@ function attachDrop(el, id, term) {
     // A trailing space so a second drop does not glue itself to the first, and so the
     // path reads as a finished argument. Newlines would SUBMIT the prompt — a dropped
     // multi-line selection must never press enter on somebody's agent, so they collapse.
-    window.haunt.write(id, payload.replace(/\r?\n/g, ' ') + ' ');
+    window.porchlight.write(id, payload.replace(/\r?\n/g, ' ') + ' ');
     term.focus();
   });
 }
@@ -306,7 +306,7 @@ async function mountTerm(id, host, slot, bay) {
     el.className = 'xterm-host';
     rec = { term, fit, el, running: false, ro: null, opened: false };
     terms.set(id, rec);
-    term.onData((d) => window.haunt.write(id, d));
+    term.onData((d) => window.porchlight.write(id, d));
     attachDrop(el, id, term);
   }
 
@@ -316,14 +316,14 @@ async function mountTerm(id, host, slot, bay) {
     rec.opened = true;
     // the textarea only exists after open(); its focus is what "the bay I'm in" means
     rec.term.textarea?.addEventListener('focus', () => { focusedBay = id; sendView(); });
-    const buf = await window.haunt.buffer(id);
+    const buf = await window.porchlight.buffer(id);
     if (buf) rec.term.write(buf);     // replay whatever ran before this tile existed
   }
 
   const fit = () => {
     try {
       rec.fit?.fit();
-      if (rec.term.cols > 0 && rec.term.rows > 0) window.haunt.resize(id, rec.term.cols, rec.term.rows);
+      if (rec.term.cols > 0 && rec.term.rows > 0) window.porchlight.resize(id, rec.term.cols, rec.term.rows);
     } catch { /* the tile is mid-layout; the next tick will do it */ }
   };
   requestAnimationFrame(fit);
@@ -332,7 +332,7 @@ async function mountTerm(id, host, slot, bay) {
   rec.ro = new ResizeObserver(fit);
   rec.ro.observe(host);
 
-  rec.running = await window.haunt.isRunning(id);
+  rec.running = await window.porchlight.isRunning(id);
   if (!rec.running && !rec.started) startBay(id, slot, bay, host);
 }
 
@@ -342,7 +342,7 @@ async function startBay(id, slot, bay, host) {
   rec.started = true;
   rec.term.reset();
 
-  const r = await window.haunt.start(id, bay.path, rec.term.cols || 80, rec.term.rows || 24, bay.home || '');
+  const r = await window.porchlight.start(id, bay.path, rec.term.cols || 80, rec.term.rows || 24, bay.home || '');
   rec.running = !!r?.ok;
   renderAll();
   if (r?.ok) rec.term.focus();
@@ -351,12 +351,12 @@ async function startBay(id, slot, bay, host) {
     const text = bay.first;
     delete bay.first;
     save();
-    setTimeout(() => { window.haunt.write(id, text); setTimeout(() => window.haunt.write(id, '\r'), 150); }, 9000);
+    setTimeout(() => { window.porchlight.write(id, text); setTimeout(() => window.porchlight.write(id, '\r'), 150); }, 9000);
   }
 }
 
 async function closeBay(id, slot) {
-  await window.haunt.kill(id);
+  await window.porchlight.kill(id);
   const rec = terms.get(id);
   rec?.ro?.disconnect();
   rec?.term.dispose();
@@ -384,7 +384,7 @@ async function closePage(i) {
     const id = bayId(i, s);
     const rec = terms.get(id);
     if (!rec) continue;
-    await window.haunt.kill(id);
+    await window.porchlight.kill(id);
     rec.ro?.disconnect();
     rec.term.dispose();
     terms.delete(id);
@@ -399,7 +399,7 @@ async function closePage(i) {
 
 // ── the + ───────────────────────────────────────────────────────────────────
 async function pick(slot) {
-  const folder = await window.haunt.pickFolder();
+  const folder = await window.porchlight.pickFolder();
   if (!folder) return;                       // cancelled: leave the bay empty
   readOnly = false;                          // picking a folder IS the user accepting this grid
   state.pages[pageIndex].bays[slot] = { path: folder.path, title: folder.title };
@@ -409,7 +409,7 @@ async function pick(slot) {
 
 // ── the house's hands (house-ui.js) ─────────────────────────────────────────
 // Open a bay as a given ghost, in the first empty slot (this page first, then a new page).
-window.hauntOpenAs = function openAs({ home = '', path, title, first = '' }) {
+window.porchlightOpenAs = function openAs({ home = '', path, title, first = '' }) {
   readOnly = false;
   let pi = pageIndex;
   let slot = state.pages[pi].bays.indexOf(null);
@@ -423,10 +423,10 @@ window.hauntOpenAs = function openAs({ home = '', path, title, first = '' }) {
   save();
   renderAll();
 };
-window.hauntPickFolder = () => window.haunt.pickFolder();
-window.hauntBays = () => state.pages.flatMap((p, i) => p.bays.map((b, s) => (b ? { ...b, id: bayId(i, s), slot: s, running: !!terms.get(bayId(i, s))?.running } : null)).filter(Boolean));
-window.hauntRerender = () => renderAll();
-window.hauntBayColor = bayColor;
+window.porchlightPickFolder = () => window.porchlight.pickFolder();
+window.porchlightBays = () => state.pages.flatMap((p, i) => p.bays.map((b, s) => (b ? { ...b, id: bayId(i, s), slot: s, running: !!terms.get(bayId(i, s))?.running } : null)).filter(Boolean));
+window.porchlightRerender = () => renderAll();
+window.porchlightBayColor = bayColor;
 
 // ── usage ───────────────────────────────────────────────────────────────────
 // The same two numbers ~/.claude/statusline.sh drew under every prompt, drawn once here
@@ -476,10 +476,10 @@ function paintUsage(u) {
 setInterval(() => { if (usage) paintUsage(); }, 30_000);
 
 // ── wiring ──────────────────────────────────────────────────────────────────
-window.haunt.onUsage((u) => paintUsage(u));
-window.haunt.onData(({ id, data }) => terms.get(id)?.term.write(data));
+window.porchlight.onUsage((u) => paintUsage(u));
+window.porchlight.onData(({ id, data }) => terms.get(id)?.term.write(data));
 
-window.haunt.onExit(({ id, code, reason }) => {
+window.porchlight.onExit(({ id, code, reason }) => {
   const rec = terms.get(id);
   if (!rec) return;
   rec.running = false;
@@ -491,8 +491,8 @@ window.haunt.onExit(({ id, code, reason }) => {
 // mira reshaped the fleet — a session started, closed, or needs a restart. Reload state
 // from main (which just wrote it) and let the NORMAL render flow do the rest: mountTerm
 // auto-starts any filled bay that is not running, exactly as if a human had clicked +.
-window.haunt.voice?.onSync(async ({ page, restart } = {}) => {
-  const loaded = await window.haunt.loadState();
+window.porchlight.voice?.onSync(async ({ page, restart } = {}) => {
+  const loaded = await window.porchlight.loadState();
   if (loaded?.pages?.length) { state = loaded; readOnly = loaded.ok === false; }
   if (typeof page === 'number') pageIndex = Math.max(0, Math.min(page, state.pages.length - 1));
   // a closed bay's terminal must not live on in the terms map
@@ -523,25 +523,25 @@ window.addEventListener('keydown', (e) => {
 
 killAllBtn.addEventListener('click', async () => {
   for (const [id, rec] of terms) {
-    if (rec.running) { await window.haunt.kill(id); rec.running = false; }
+    if (rec.running) { await window.porchlight.kill(id); rec.running = false; }
   }
   renderAll();
 });
 
 (async function boot() {
-  const loaded = await window.haunt.loadState();
+  const loaded = await window.porchlight.loadState();
   if (loaded?.pages?.length) state = loaded;
   // 🔑 The id-patch below calls save(). If the load FAILED, that save is what overwrites a
   // real state file with an empty one — which is exactly how seven bays were lost once.
   readOnly = loaded?.ok === false;
   if (readOnly) {
-    console.warn('haunt: could not read state.json —', loaded.error,
+    console.warn('porchlight: could not read state.json —', loaded.error,
       '· a copy is at state.json.corrupt · not writing anything until you change something deliberately');
   }
   let patched = false;
   for (const p of state.pages) if (!p.id) { p.id = newPageId(); patched = true; }   // state written before ids existed
   if (patched) save();
-  if (window.haunt.zoomAtBoot) zoomed = window.haunt.zoomAtBoot;   // test hook
+  if (window.porchlight.zoomAtBoot) zoomed = window.porchlight.zoomAtBoot;   // test hook
   renderAll();
-  paintUsage(await window.haunt.usage());
+  paintUsage(await window.porchlight.usage());
 })();

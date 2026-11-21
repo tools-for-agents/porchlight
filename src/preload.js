@@ -7,7 +7,7 @@
 
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
-contextBridge.exposeInMainWorld('haunt', {
+contextBridge.exposeInMainWorld('porchlight', {
   // 🔑 THE ONLY WAY TO GET A DROPPED FILE'S PATH ON ELECTRON ≥32.
   //
   // `File.path` — the property every drag-and-drop snippet on the internet uses — was
@@ -20,9 +20,9 @@ contextBridge.exposeInMainWorld('haunt', {
   pathForFile: (file) => {
     try { return webUtils.getPathForFile(file) || ''; } catch { return ''; }
   },
-  // test hook: HAUNT_ZOOM=<bayId> npm start  → boots with that bay zoomed, so the
+  // test hook: PORCHLIGHT_ZOOM=<bayId> npm start  → boots with that bay zoomed, so the
   // screenshot harness can photograph a state that otherwise needs a click.
-  zoomAtBoot: process.env.HAUNT_ZOOM || null,
+  zoomAtBoot: process.env.PORCHLIGHT_ZOOM || null,
 
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
 
@@ -53,18 +53,18 @@ contextBridge.exposeInMainWorld('haunt', {
     onLines: (fn) => ipcRenderer.on('room:lines', (_e, p) => fn(p)),
     onTyped: (fn) => ipcRenderer.on('house:typed', (_e, p) => fn(p)),
     onActive: (fn) => ipcRenderer.on('bay:active', (_e, p) => fn(p)),
-    // test hook: HAUNT_HOUSE_CHAN=<ghost name> boots the chat on that conversation, for the screenshot harness
-    chanAtBoot: process.env.HAUNT_HOUSE_CHAN || null,
-    viewAtBoot: process.env.HAUNT_VIEW || null,   // test hook: chat | bays
+    // test hook: PORCHLIGHT_HOUSE_CHAN=<ghost name> boots the chat on that conversation, for the screenshot harness
+    chanAtBoot: process.env.PORCHLIGHT_HOUSE_CHAN || null,
+    viewAtBoot: process.env.PORCHLIGHT_VIEW || null,   // test hook: chat | bays
   },
 
   // jarvis — the voice. The renderer contributes the microphone (getUserMedia lives
   // there) and the orb; every decision — whose voice, which bay, what to type — is made
   // in main. Raw audio goes DOWN this bridge; only status events ever come back up.
   voice: {
-    // test hook: HAUNT_VOICE_DEMO=hearing|thinking|speaking|enroll boots the voice UI in
+    // test hook: PORCHLIGHT_VOICE_DEMO=hearing|thinking|speaking|enroll boots the voice UI in
     // that state with a sample exchange, so the screenshot harness can photograph it.
-    demo: process.env.HAUNT_VOICE_DEMO || null,
+    demo: process.env.PORCHLIGHT_VOICE_DEMO || null,
     toggle: () => ipcRenderer.invoke('voice:toggle'),
     status: () => ipcRenderer.invoke('voice:status'),
     frame: (buf) => ipcRenderer.send('voice:frame', buf),
@@ -76,8 +76,8 @@ contextBridge.exposeInMainWorld('haunt', {
     onEvent: (fn) => ipcRenderer.on('voice:event', (_e, p) => fn(p)),
     // mira changed the fleet (started/closed a session) — reload state and re-render
     onSync: (fn) => ipcRenderer.on('voice:sync', (_e, p) => fn(p)),
-    // test hook, dead unless main armed it (HAUNT_VOICE_DEMO)
+    // test hook, dead unless main armed it (PORCHLIGHT_VOICE_DEMO)
     testAct: (p) => ipcRenderer.send('voice:test-act', p),
-    demoStart: process.env.HAUNT_VOICE_DEMO_START || null,
+    demoStart: process.env.PORCHLIGHT_VOICE_DEMO_START || null,
   },
 });

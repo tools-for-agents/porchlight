@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// haunt's statusline, which is not a status line.
+// porchlight's statusline, which is not a status line.
 //
 // Claude Code runs `statusLine.command` on every state change and pipes it a JSON blob
 // describing the session — including rate_limits.five_hour and rate_limits.seven_day,
@@ -13,7 +13,7 @@
 //
 //   1. The usage bar disappears from all nine tiles. Nine copies of the same two
 //      percentages is eight copies too many, and the tiles are 20 rows tall.
-//   2. haunt gets live usage from the real source — the same feed the user's own
+//   2. porchlight gets live usage from the real source — the same feed the user's own
 //      statusline reads — with no extra `claude` invocation, no polling, and no token
 //      of any kind. It costs nothing because Claude Code was going to run this anyway.
 //
@@ -23,8 +23,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const OUT = process.env.HAUNT_USAGE_FILE
-  || path.join(process.env.HOME || '', 'Library/Application Support/haunt/usage.json');
+const OUT = process.env.PORCHLIGHT_USAGE_FILE
+  || path.join(process.env.HOME || '', 'Library/Application Support/porchlight/usage.json');
 
 let raw = '';
 process.stdin.setEncoding('utf8');

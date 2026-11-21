@@ -57,9 +57,9 @@ const FOLLOW_UP_MS = 25_000;   // after jarvis speaks, you may answer without th
 const HISTORY_KEPT = 4;
 
 // Models live in ONE fixed place regardless of --user-data-dir: a test run in a temp dir
-// must not want its own 570MB copy. HAUNT_MODELS overrides for CI or a second machine.
-const modelsDir = () => process.env.HAUNT_MODELS
-  || path.join(os.homedir(), 'Library', 'Application Support', 'haunt', 'voice-models');
+// must not want its own 570MB copy. PORCHLIGHT_MODELS overrides for CI or a second machine.
+const modelsDir = () => process.env.PORCHLIGHT_MODELS
+  || path.join(os.homedir(), 'Library', 'Application Support', 'porchlight', 'voice-models');
 const modelsReady = () => fs.existsSync(path.join(modelsDir(), 'whisper', 'small-encoder.int8.onnx'))
   && fs.existsSync(path.join(modelsDir(), 'silero_vad.onnx'));
 
@@ -532,7 +532,7 @@ function createJarvis({ userDataDir, bays, loadState, saveState, killBay, findCl
     ptt() { if (enabled) { pttArmed = true; event({ t: 'ptt' }); } },
     setView(v) { view = { page: v.page | 0, focused: v.focused || null }; },
     enrollStart, enrollCapture, enrollCancel,
-    act,   // exposed for main's HAUNT_VOICE_DEMO test hook — same code path the brain drives
+    act,   // exposed for main's PORCHLIGHT_VOICE_DEMO test hook — same code path the brain drives
     shutdown() { try { engine?.kill(); } catch { /* going down anyway */ } engine = null; },
   };
   return api;

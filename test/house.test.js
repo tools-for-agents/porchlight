@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'haunt-house-'));
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'porchlight-house-'));
 process.env.GHOST_COMMONS = dir;   // never the real room
 const h = require('../src/house.js');
 

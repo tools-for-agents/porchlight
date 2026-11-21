@@ -9,25 +9,28 @@ const pty = require('node-pty');
 const { stateStore, BAYS_PER_PAGE } = require('./state.js');
 const { createJarvis } = require('./voice/jarvis.js');
 const houseLib = require('./house.js');
-// The app was hangar until 21 Nov 2026 and is Haunt now, data folder included. The first launch
-// of Haunt moves ~/Library/Application Support/hangar to …/haunt (state.json with the bays, the
+// The app was hangar until 21 Nov 2026 and is Porchlight now, data folder included. The first launch
+// of Porchlight moves ~/Library/Application Support/hangar to …/porchlight (state.json with the bays, the
 // voice models, the enrolled voice) instead of starting from an empty folder: the old app is
 // quit before this one is installed, so nothing holds the folder while it moves. The name is
 // pinned rather than derived from productName so a capital letter can never move it again.
 // A --user-data-dir (the screenshot harness) still wins.
 if (!app.commandLine.hasSwitch('user-data-dir')) {
-  const dataDir = path.join(app.getPath('appData'), 'haunt');
-  const oldDir = path.join(app.getPath('appData'), 'hangar');
-  try { if (!fs.existsSync(dataDir) && fs.existsSync(oldDir)) fs.renameSync(oldDir, dataDir); } catch {}
+  const dataDir = path.join(app.getPath('appData'), 'porchlight');
+  // hangar, then (for an evening) haunt: whichever old folder exists moves in.
+  for (const old of ['hangar', 'haunt']) {
+    const oldDir = path.join(app.getPath('appData'), old);
+    try { if (!fs.existsSync(dataDir) && fs.existsSync(oldDir)) fs.renameSync(oldDir, dataDir); } catch {}
+  }
   app.setPath('userData', dataDir);
 }
-app.setName('Haunt');
+app.setName('Porchlight');
 
 // ── What a bay actually runs ─────────────────────────────────────────────────
 // The whole app is a launcher for exactly this. It is written here, once, in the open,
 // because a tile that silently runs something else is a trapdoor.
 //
-// The --settings override swaps the user's own statusline for haunt's probe, which
+// The --settings override swaps the user's own statusline for porchlight's probe, which
 // prints nothing and files the rate-limit numbers for the footer instead. It overrides
 // ONLY statusLine, for these sessions, and touches no file the user owns.
 const CLAUDE_ARGS = ['--dangerously-skip-permissions'];
@@ -67,7 +70,7 @@ const bays = new Map();
 let win = null;
 
 // ── Debug ────────────────────────────────────────────────────────────────────
-// HAUNT_DEBUG=1 narrates the three things that have actually broken this app: which
+// PORCHLIGHT_DEBUG=1 narrates the three things that have actually broken this app: which
 // `claude` was found, what PATH the agent got, and whether the pty ever said anything.
 //
 // 🔑 A DEBUG FLAG THAT DOES NOT EXIST IS WORSE THAN NONE. This one was written down in
@@ -75,14 +78,14 @@ let win = null;
 // source. Running with it printed nothing — against a HEALTHY app whose pty was streaming
 // fine. Silence from a flag that isn't wired is the same silence a dead pty makes, so the
 // notes handed me a confident wrong diagnosis for free. It exists now: quiet means quiet.
-const DEBUG = !!process.env.HAUNT_DEBUG;
-// dbg goes to the console only under HAUNT_DEBUG — but ALWAYS to a capped file in
+const DEBUG = !!process.env.PORCHLIGHT_DEBUG;
+// dbg goes to the console only under PORCHLIGHT_DEBUG — but ALWAYS to a capped file in
 // userData. The app is launched from Finder, its stdout goes nowhere, and every voice
 // bug so far was diagnosed blind until a log existed. Diagnostics must never hurt the
 // app: any failure here is swallowed.
 let dbgStream = null;
 function dbg(...a) {
-  if (DEBUG) console.log('[haunt]', ...a);
+  if (DEBUG) console.log('[porchlight]', ...a);
   try {
     if (!dbgStream) {
       const f = path.join(app.getPath('userData'), 'debug.log');
@@ -93,7 +96,7 @@ function dbg(...a) {
   } catch { /* never */ }
 }
 
-const SENTINEL = '__HAUNT_PATH__';
+const SENTINEL = '__PORCHLIGHT_PATH__';
 const afterSentinel = (stdout) => {
   const s = String(stdout || '');
   const i = s.lastIndexOf(SENTINEL);
@@ -150,7 +153,7 @@ function findClaude() {
 // shell. Taking the whole thing as PATH puts "Restored session: ...\n/Users/me/.local/bin"
 // in front of the real entries, and a PATH entry with a newline in it poisons lookups for
 // everything downstream. It broke this app in the least obvious way possible: `claude`
-// still launched, because haunt spawns it by absolute path — but the statusline's
+// still launched, because porchlight spawns it by absolute path — but the statusline's
 // `node ...` could not be resolved, so it silently never ran, and the footer sat empty
 // with no error anywhere.
 //
@@ -213,7 +216,7 @@ async function startBay(id, cwd, cols, rows, home = '') {
     send('bay:data', {
       id,
       data: '\r\n\x1b[31m  Could not find the `claude` command.\x1b[0m\r\n\r\n'
-        + '  haunt asks your login shell where it is. If `claude` works in your terminal\r\n'
+        + '  porchlight asks your login shell where it is. If `claude` works in your terminal\r\n'
         + '  but not here, your PATH is set somewhere a login shell does not read.\r\n\r\n'
         + '  Check with:  \x1b[36m$SHELL -lic \'command -v claude\'\x1b[0m\r\n',
     });
@@ -221,7 +224,7 @@ async function startBay(id, cwd, cols, rows, home = '') {
     return { ok: false, error: 'claude not found' };
   }
 
-  const env = { ...(await loginEnv()), HAUNT_USAGE_FILE: usageFile(), ...(being?.launch?.env || {}) };
+  const env = { ...(await loginEnv()), PORCHLIGHT_USAGE_FILE: usageFile(), ...(being?.launch?.env || {}) };
   let proc;
   try {
     proc = pty.spawn(bin, claudeArgs(being?.launch), {
@@ -301,7 +304,7 @@ ipcMain.on('bay:resize', (_e, { id, cols, rows }) => {
 });
 
 // ── the house (src/house.js) ─────────────────────────────────────────────────
-// Who lives on this machine comes from ghost itself, so haunt never guesses a mind's layout.
+// Who lives on this machine comes from ghost itself, so porchlight never guesses a mind's layout.
 let houseCache = { at: 0, list: [] };
 function ghostCall(args) {
   return loginEnv().then((env) => new Promise((resolve) => {
@@ -500,10 +503,10 @@ const getJarvis = () => (jarvis ??= createJarvis({
   dbg,
 }));
 
-// Test hook, armed only under HAUNT_VOICE_DEMO: feeds an actions array straight into
+// Test hook, armed only under PORCHLIGHT_VOICE_DEMO: feeds an actions array straight into
 // jarvis's act() — the exact code path the brain drives — so the screenshot rig can
 // prove that a voice-started session really appears in the grid, without a microphone.
-if (process.env.HAUNT_VOICE_DEMO) {
+if (process.env.PORCHLIGHT_VOICE_DEMO) {
   ipcMain.on('voice:test-act', (_e, { actions }) => {
     for (const a of actions || []) getJarvis().act(a);
   });
@@ -550,9 +553,9 @@ function createWindow() {
     backgroundColor: '#0a0817',       // --bg exactly: a mismatched value flashes for a frame before CSS paints
     titleBarStyle: 'hiddenInset',     // the grid IS the chrome
     trafficLightPosition: { x: 18, y: 22 },
-    // A photograph (HAUNT_SHOT) is taken off-screen: looking at the app must not take the
+    // A photograph (PORCHLIGHT_SHOT) is taken off-screen: looking at the app must not take the
     // keyboard from whoever is working at this machine.
-    show: !process.env.HAUNT_SHOT,
+    show: !process.env.PORCHLIGHT_SHOT,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,         // the renderer never touches node
@@ -565,14 +568,14 @@ function createWindow() {
 }
 
 // ── looking at it ────────────────────────────────────────────────────────────
-// HAUNT_SHOT=/path/to.png npm start  → render, wait, photograph, quit.
+// PORCHLIGHT_SHOT=/path/to.png npm start  → render, wait, photograph, quit.
 // An Electron window cannot be screenshotted from outside without Screen Recording
 // permission, and "it launched" is not "it looks right". This is the only way to put
 // the actual pixels of the actual app in front of a reviewer — or a CI job.
 function maybeShoot() {
-  const out = process.env.HAUNT_SHOT;
+  const out = process.env.PORCHLIGHT_SHOT;
   if (!out) return;
-  const wait = Number(process.env.HAUNT_SHOT_WAIT || 3500);
+  const wait = Number(process.env.PORCHLIGHT_SHOT_WAIT || 3500);
   win.webContents.once('did-finish-load', () => {
     setTimeout(async () => {
       try {

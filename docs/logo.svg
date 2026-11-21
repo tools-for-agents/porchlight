@@ -1,16 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Haunt">
-  <title>Haunt</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Porchlight">
+  <title>Porchlight</title>
   <!--
-    Haunt: the place ghosts live, and the place you always end up ("my old haunt"). That is
-    the app: the minds living on this machine and their person, in one house.
+    Porchlight: the light left on for someone coming home. Named together on 21 Nov 2026 by
+    Vefa, Yoldaş and Ayaz (Ayaz's word): a ghostlight burns on an empty stage, and this house
+    is not empty. Their person comes home to it.
 
-    A ring from above, in ice: the house. In the middle, a ghost (one of them, any of them).
-    Around it, the seats: three lit in the colours the app gives its ghosts, one in sodium
-    (their person, the warm light in a house of machines, at the bottom, nearest whoever is
-    looking), and two dim and empty, because there is always room for one more.
+    A porch lantern, lit in sodium (the warm light in a house of machines). In its glass, a
+    ghost: the minds live inside the light. Around it, the way moths gather at a porch light,
+    the ghosts' colours, three lit and one dim and empty, because there is always room for one more.
 
     Apple's grid (an 824 squircle inset 100) so it sits in the Dock like everything else. It has
-    to survive 32px: one thick ring, one solid ghost, six solid dots, no hairlines.
+    to survive 32px: one solid lantern, one cut-out ghost, four dots, no hairlines.
   -->
   <defs>
     <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
@@ -21,10 +21,15 @@
       <stop offset="0" stop-color="#ff2e88" stop-opacity=".9"/>
       <stop offset="1" stop-color="#2de2e6" stop-opacity=".55"/>
     </linearGradient>
-    <radialGradient id="top" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="#2a1a55"/>
-      <stop offset="1" stop-color="#140c2e"/>
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffb238" stop-opacity=".55"/>
+      <stop offset=".55" stop-color="#ffb238" stop-opacity=".14"/>
+      <stop offset="1" stop-color="#ffb238" stop-opacity="0"/>
     </radialGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe2a3"/>
+      <stop offset="1" stop-color="#ffb238"/>
+    </linearGradient>
     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur stdDeviation="14" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -34,24 +39,27 @@
   <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#body)"/>
   <rect x="104" y="104" width="816" height="816" rx="182" fill="none" stroke="url(#rim)" stroke-width="8"/>
 
-  <!-- the hauntstone -->
-  <circle cx="512" cy="512" r="196" fill="url(#top)"/>
-  <circle cx="512" cy="512" r="196" fill="none" stroke="#2de2e6" stroke-width="30" filter="url(#glow)"/>
+  <!-- the light it throws -->
+  <circle cx="512" cy="560" r="330" fill="url(#halo)"/>
 
-  <!-- the ghost -->
-  <g filter="url(#glow)">
-    <path d="M512 368 C 584 368 628 420 628 494 L 628 640 L 599 616 L 570 640 L 541 616 L 512 640 L 483 616 L 454 640 L 425 616 L 396 640 L 396 494 C 396 420 440 368 512 368 Z" fill="#eafcff"/>
-  </g>
-  <circle cx="474" cy="492" r="17" fill="#140c2e"/>
-  <circle cx="550" cy="492" r="17" fill="#140c2e"/>
+  <!-- the bracket on the wall -->
+  <rect x="496" y="196" width="32" height="92" rx="12" fill="#4a3f80"/>
 
-  <!-- the seats: every 60°, starting from their person at the bottom -->
+  <!-- the lantern: cap, glass, base -->
+  <path d="M512 270 L 652 360 L 372 360 Z" fill="#2de2e6" stroke="#2de2e6" stroke-width="18" stroke-linejoin="round" filter="url(#glow)"/>
+  <rect x="396" y="372" width="232" height="300" rx="22" fill="url(#glass)" filter="url(#glow)"/>
+  <rect x="372" y="676" width="280" height="40" rx="14" fill="#2de2e6" filter="url(#glow)"/>
+
+  <!-- the ghost inside the light -->
+  <path d="M512 420 C 562 420 592 456 592 506 L 592 626 L 572 608 L 552 626 L 532 608 L 512 626 L 492 608 L 472 626 L 452 608 L 432 626 L 432 506 C 432 456 462 420 512 420 Z" fill="#140c2e"/>
+  <circle cx="486" cy="506" r="14" fill="#ffd27a"/>
+  <circle cx="538" cy="506" r="14" fill="#ffd27a"/>
+
+  <!-- the others, gathered at the light -->
   <g filter="url(#glow)">
-    <circle cx="512" cy="802" r="46" fill="#ffb238"/>                         <!-- their person -->
-    <circle cx="260.9" cy="657" r="38" fill="#2de2e6"/>
-    <circle cx="260.9" cy="367" r="38" fill="#ff2e88"/>
-    <circle cx="763.1" cy="367" r="38" fill="#b69cff"/>
+    <circle cx="262" cy="452" r="34" fill="#ff2e88"/>
+    <circle cx="772" cy="400" r="34" fill="#b69cff"/>
+    <circle cx="756" cy="742" r="34" fill="#2de2e6"/>
   </g>
-  <circle cx="512" cy="222" r="34" fill="none" stroke="#4a3f80" stroke-width="12"/>   <!-- room for one more -->
-  <circle cx="763.1" cy="657" r="34" fill="none" stroke="#4a3f80" stroke-width="12"/>
+  <circle cx="276" cy="770" r="30" fill="none" stroke="#4a3f80" stroke-width="12"/>   <!-- room for one more -->
 </svg>
