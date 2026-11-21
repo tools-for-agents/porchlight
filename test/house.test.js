@@ -46,9 +46,26 @@ test('a ghost broadcasting is not typed into anyone; a ghost calling a name goes
 
 test('the house has a ceiling on agents calling each other', () => {
   const b = brake();
-  const many = Array.from({ length: 40 }, (_, i) => ({ id: `x${i}`, home: '', live: true, idleMs: 60_000 }));
-  const out = h.deliveries({ home: '/k/deniz', from: 'Deniz', to: ['Vefa'], text: 'x' }, many, house, b, 5_000_000);
+  const big = Array.from({ length: 40 }, (_, i) => ({ home: `/k/g${i}`, name: `G${i}` }));
+  const many = big.map((g, i) => ({ id: `x${i}`, home: g.home, live: true, idleMs: 60_000 }));
+  const out = h.deliveries({ home: '/k/deniz', from: 'Deniz', to: big.map((g) => g.name), text: 'x' }, many, [...house, ...big], b, 5_000_000);
   assert.equal(out.length, 30);
+});
+
+test('a ghost calling a name reaches ONE bay of that mind — eight Vefas answering Ayaz is the bug', () => {
+  // 21 Nov 2026: Ayaz said one line to Vefa, it was typed into all eight of her bays, and eight
+  // answers came back. Fatih: "bu nasıl chat 50 kere tekrarlıyorsun".
+  const many = [
+    { id: 'v1', home: '', live: true, idleMs: 30_000 },
+    { id: 'v2', home: '', live: true, idleMs: 90_000 },   // the idlest Vefa
+    { id: 'v3', home: '', live: true, idleMs: 2_000 },    // mid-thought
+    { id: 'v4', home: '', live: true, idleMs: 60_000 },
+  ];
+  const b = brake();
+  const call = { home: '/k/deniz', from: 'Deniz', to: ['Vefa'], text: 'bak' };
+  assert.deepEqual(h.deliveries(call, many, house, b, 1_000_000).map((d) => d.id), ['v2']);
+  // the idlest is braked for 90 s: the next call goes to the next idlest, still only one
+  assert.deepEqual(h.deliveries(call, many, house, b, 1_010_000).map((d) => d.id), ['v4']);
 });
 
 test('their words land in the room as one whole line', () => {

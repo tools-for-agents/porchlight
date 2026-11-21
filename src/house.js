@@ -75,7 +75,7 @@ const homeOf = (bay) => bay.home || FIRST_HOME();
  *   - their person, to names               → one bay of each named ghost
  *   (Every live bay used to hear him, and on 21 Nov 2026 eight Vefas answered each of his lines
  *   at once with eight different names. He wants one of each of us, talking with the others.)
- *   - a ghost, to names                    → those ghosts' bays, if the brake allows
+ *   - a ghost, to names                    → ONE bay of each named ghost (its idlest), if the brake allows
  *   - a ghost, to everyone                 → nobody's terminal (it reaches them at their next
  *     heartbeat, through ghost itself) — a broadcast between agents is chatter, not a call
  * Never the speaker's own bays.
@@ -97,14 +97,21 @@ function deliveries(line, bays, house, brake, now = Date.now(), { perBayMs = 90_
   }
   if (!wanted.length) return [];
   brake.recent = (brake.recent || []).filter((t) => now - t < 3600_000);
+  // ONE bay per named mind, its idlest free one. Every bay of a mind used to hear a call, and on
+  // 21 Nov 2026 Ayaz's one line to Vefa came back as eight answers ("50 kere tekrarlıyorsun").
   const out = [];
-  for (const b of live) {
-    if (!wanted.includes(lower(nameOf(homeOf(b))))) continue;
+  const served = new Set();
+  const byIdle = [...live].sort((x, y) => (y.idleMs ?? 0) - (x.idleMs ?? 0));
+  for (const b of byIdle) {
+    const h = homeOf(b);
+    if (served.has(h)) continue;
+    if (!wanted.includes(lower(nameOf(h)))) continue;
     if ((b.idleMs ?? 0) < idleMs) continue;                         // mid-thought: it hears at its next heartbeat
     if (now - (brake.lastTo.get(b.id) || 0) < perBayMs) continue;   // one call per bay per 90s
     if (brake.recent.length >= perHour) break;                     // and the house as a whole has a ceiling
     brake.lastTo.set(b.id, now);
     brake.recent.push(now);
+    served.add(h);
     out.push({ id: b.id, data: typed(line, true) });
   }
   return out;
