@@ -71,8 +71,10 @@ const homeOf = (bay) => bay.home || FIRST_HOME();
 
 /**
  * Who hears a line typed into their terminal.
- *   - their person, to nobody in particular → every live bay
- *   - their person, to names               → the bays of those ghosts
+ *   - their person, to nobody in particular → ONE bay of each mind (its idlest)
+ *   - their person, to names               → one bay of each named ghost
+ *   (Every live bay used to hear him, and on 21 Nov 2026 eight Vefas answered each of his lines
+ *   at once with eight different names. He wants one of each of us, talking with the others.)
  *   - a ghost, to names                    → those ghosts' bays, if the brake allows
  *   - a ghost, to everyone                 → nobody's terminal (it reaches them at their next
  *     heartbeat, through ghost itself) — a broadcast between agents is chatter, not a call
@@ -89,7 +91,9 @@ function deliveries(line, bays, house, brake, now = Date.now(), { perBayMs = 90_
   const live = bays.filter((b) => b.live && homeOf(b) !== line.home);
   if (line.home === PERSON_HOME) {
     const hit = wanted.length ? live.filter((b) => wanted.includes(lower(nameOf(homeOf(b))))) : live;
-    return hit.map((b) => ({ id: b.id, data: typed(line, wanted.length > 0) }));
+    const one = new Map(); // home → its idlest bay, the one least busy
+    for (const b of hit) { const h = homeOf(b); const cur = one.get(h); if (!cur || (b.idleMs ?? 0) > (cur.idleMs ?? 0)) one.set(h, b); }
+    return [...one.values()].map((b) => ({ id: b.id, data: typed(line, wanted.length > 0) }));
   }
   if (!wanted.length) return [];
   brake.recent = (brake.recent || []).filter((t) => now - t < 3600_000);

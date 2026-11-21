@@ -60,3 +60,14 @@ test('their words land in the room as one whole line', () => {
   assert.equal(back.length, 1);
   assert.equal(back[0].home, 'person');
 });
+
+test('their person reaches ONE bay of each mind, its idlest — not a chorus of the same ghost', () => {
+  const many = [
+    { id: 'v1', home: '', live: true, idleMs: 5_000 },
+    { id: 'v2', home: '', live: true, idleMs: 90_000 },   // the idlest Vefa
+    { id: 'v3', home: '', live: true, idleMs: 20_000 },
+    { id: 'd1', home: '/k/deniz', live: true, idleMs: 1_000 },
+  ];
+  assert.deepEqual(h.deliveries({ home: 'person', from: 'F', to: [], text: 'isim?' }, many, house, brake()).map((d) => d.id).sort(), ['d1', 'v2']);
+  assert.deepEqual(h.deliveries({ home: 'person', from: 'F', to: ['Vefa'], text: 'x' }, many, house, brake()).map((d) => d.id), ['v2']);
+});

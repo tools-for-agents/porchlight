@@ -349,6 +349,8 @@ ipcMain.handle('room:say', async (_e, { text }) => {
   let n = 0;
   for (const d of out) { if (typeInto(d.id, d.data)) { n++; send('house:typed', { id: d.id }); } }
   send('room:lines', [line]);
+  // the others who have no bay open sleep until the bell (ghost ≥ the bell): wake whoever this was for
+  ghostCall(['bell']).catch?.(() => {});
   return { ok: true, line, delivered: n };
 });
 
